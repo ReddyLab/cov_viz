@@ -2,7 +2,6 @@ mod args;
 mod build_data;
 mod data_structures;
 mod serialize;
-mod utils;
 
 use std::collections::HashMap;
 use std::env;

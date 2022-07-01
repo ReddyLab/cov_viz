@@ -12,7 +12,6 @@ use crate::data_structures::facets::{
     FACET_GRNA_TYPE, FACET_SIGNIFICANCE, FACET_TYPE_DISCRETE,
 };
 use crate::data_structures::*;
-use crate::utils::print_pct_complete;
 use crate::DbID;
 
 const GRCH38: [(&str, i32); 25] = [
@@ -69,7 +68,6 @@ const GRCH37: [(&str, i32); 25] = [
     ("Y", 59373566),
     ("MT", 16569),
 ];
-const STEP: usize = 500_000;
 
 fn select_assembly<'a>(
     assembly_name: &'a str,
@@ -159,7 +157,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         })
         .collect();
     // (id: DbID, numeric facets: Json)
-    let reg_effects_statement = client.prepare("SELECT search_regulatoryeffect.id, search_regulatoryeffect.facet_num_values FROM search_regulatoryeffect INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id) WHERE search_experiment.accession_id = $1 ORDER BY search_regulatoryeffect.id ASC LIMIT $2 OFFSET $3")?;
+    let reg_effects_statement = client.prepare("SELECT search_regulatoryeffect.id, search_regulatoryeffect.facet_num_values FROM search_regulatoryeffect INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id) WHERE search_experiment.accession_id = $1")?;
     // (re id: DbID, facet value id: DbID, value: &str, facet id: DbID)
     let facet_values_statement = client.prepare("SELECT (search_regulatoryeffect_facet_values.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_facetvalue.id, search_facetvalue.value, search_facetvalue.facet_id FROM search_facetvalue INNER JOIN search_regulatoryeffect_facet_values ON (search_facetvalue.id = search_regulatoryeffect_facet_values.facetvalue_id) WHERE search_regulatoryeffect_facet_values.regulatoryeffect_id = ANY($1)")?;
     // (re id: DbID, dnaregion id: DbID, numeric facets: Json, chrom name: &str, location: Range(i32))
@@ -193,206 +191,203 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
     let mut facet_ids: HashSet<DbID> = HashSet::new();
 
+    let re_start_time = Instant::now();
+
+    let reg_effects = client.query(&reg_effects_statement, &[&options.experiment_accession_id])?;
+    let mut reg_effect_num_facets: HashMap<DbID, HashMap<&str, f32>> = HashMap::new();
+    for row in &reg_effects {
+        let key = row.get::<usize, DbID>(0);
+        let value = row.get::<usize, Json<HashMap<&str, f32>>>(1).0;
+        reg_effect_num_facets.insert(key, value);
+    }
+
+    let reg_effect_id_list = reg_effects
+        .iter()
+        .map(|row| row.get::<&str, DbID>("id"))
+        .collect::<Vec<DbID>>();
+    let facet_values = client.query(&facet_values_statement, &[&reg_effect_id_list])?;
+    // (re id: DbID, facet value id: DbID, value: &str, facet id: DbID)
+    let mut facet_values_dict: HashMap<DbID, Vec<(DbID, &str, DbID)>> = HashMap::new();
+    for row in &facet_values {
+        let key = row.get::<usize, DbID>(0);
+        let value = (
+            row.get::<usize, DbID>(1),
+            row.get::<usize, &str>(2),
+            row.get::<usize, DbID>(3),
+        );
+        if facet_values_dict.contains_key(&key) {
+            if let Some(v) = facet_values_dict.get_mut(&key) {
+                v.push(value);
+            }
+        } else {
+            facet_values_dict.insert(key, vec![value]);
+        }
+    }
+
+    let sources = client.query(&re_sources_statement, &[&reg_effect_id_list])?;
+    let mut source_dict: HashMap<
+        DbID,
+        Vec<(DbID, Option<Json<HashMap<&str, f32>>>, &str, Range<i32>)>,
+    > = HashMap::new();
+    for row in &sources {
+        let key = row.get::<usize, DbID>(0);
+        let value = (
+            row.get::<usize, DbID>(1),
+            row.get::<usize, Option<Json<HashMap<&str, f32>>>>(2),
+            row.get::<usize, &str>(3),
+            row.get::<usize, Range<i32>>(4),
+        );
+        if source_dict.contains_key(&key) {
+            if let Some(v) = source_dict.get_mut(&key) {
+                v.push(value);
+            }
+        } else {
+            source_dict.insert(key, vec![value]);
+        }
+    }
+
+    let targets = client.query(&re_targets_statement, &[&reg_effect_id_list])?;
+    let mut target_dict: HashMap<DbID, Vec<(DbID, &str, Range<i32>, &str)>> = HashMap::new();
+    for row in &targets {
+        let key = row.get::<usize, DbID>(0);
+        let value = (
+            row.get::<usize, DbID>(1),
+            row.get::<usize, &str>(2),
+            row.get::<usize, Range<i32>>(3),
+            row.get::<usize, &str>(4),
+        );
+        if target_dict.contains_key(&key) {
+            if let Some(v) = target_dict.get_mut(&key) {
+                v.push(value);
+            }
+        } else {
+            target_dict.insert(key, vec![value]);
+        }
+    }
+
+    let source_id_list = sources
+        .iter()
+        .map(|row| row.get::<&str, DbID>("id"))
+        .collect::<Vec<DbID>>();
+    let source_facets = client.query(&source_facet_statement, &[&source_id_list])?;
+    let mut source_facet_dict: HashMap<DbID, Vec<(DbID, &str, DbID)>> = HashMap::new();
+    for row in &source_facets {
+        let key = row.get::<usize, DbID>(0);
+        let value = (
+            row.get::<usize, DbID>(1),
+            row.get::<usize, &str>(2),
+            row.get::<usize, DbID>(3),
+        );
+        if source_facet_dict.contains_key(&key) {
+            if let Some(v) = source_facet_dict.get_mut(&key) {
+                v.push(value);
+            }
+        } else {
+            source_facet_dict.insert(key, vec![value]);
+        }
+    }
+
     let re_count: i64 = client.query_one("SELECT COUNT(*) AS count FROM search_regulatoryeffect INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id) WHERE search_experiment.accession_id = $1", &[&options.experiment_accession_id])?.get("count");
     println!("Regulatory Effect count: {}", re_count);
 
-    let re_start_time = Instant::now();
-    let mut pct_tracker = print_pct_complete(re_count);
-    for start in (0..=re_count).step_by(STEP) {
-        pct_tracker(start);
+    // For each regulatory effect we want to add all the facets associated with the effect itself,
+    // its sources and its targets to the bucket associated with the each source and target.
+    // For each source we want to keep track of all the target buckets it's associated with, and for each
+    // source we want to keep track of all the source buckets it's associated with.
+    for re_id in reg_effect_id_list {
+        // If we are targeting a specific chromosome filter out sources not in that chromosome.
+        // They won't be visible in the visualization and the bucket index will be wrong.
+        let re_source = source_dict.get(&re_id).unwrap();
+        let re_facets = reg_effect_num_facets.get(&re_id).unwrap();
+        let effect_size = *re_facets.get(FACET_EFFECT_SIZE).unwrap();
+        let significance = *re_facets.get(FACET_SIGNIFICANCE).unwrap();
+        let all_chromos = match options.chromo {
+            Some(_) => false,
+            None => true,
+        };
+        let re_source_ref = Vec::from_iter(
+            re_source
+                .iter()
+                .filter(|s| all_chromos || s.2 == options.chromo.unwrap()),
+        );
+        let mut source_counter: HashSet<Bucket> = HashSet::new();
+        let mut target_counter: HashSet<Bucket> = HashSet::new();
 
-        let reg_effects = client.query(
-            &reg_effects_statement,
-            &[&options.experiment_accession_id, &(STEP as i64), &start],
-        )?;
-        let mut reg_effect_num_facets: HashMap<DbID, HashMap<&str, f32>> = HashMap::new();
-        for row in &reg_effects {
-            let key = row.get::<usize, DbID>(0);
-            let value = row.get::<usize, Json<HashMap<&str, f32>>>(1).0;
-            reg_effect_num_facets.insert(key, value);
+        let mut source_disc_facets: HashSet<DbID> = HashSet::new();
+        let mut reg_disc_facets: HashSet<DbID> = HashSet::new();
+
+        for facets in facet_values_dict.get(&re_id) {
+            facets
+                .iter()
+                .filter(|f| f.2 == dir_facet.id)
+                .for_each(|f| drop(reg_disc_facets.insert(f.0)));
         }
 
-        let reg_effect_id_list = reg_effects
-            .iter()
-            .map(|row| row.get::<&str, DbID>("id"))
-            .collect::<Vec<DbID>>();
-        let facet_values = client.query(&facet_values_statement, &[&reg_effect_id_list])?;
-        // (re id: DbID, facet value id: DbID, value: &str, facet id: DbID)
-        let mut facet_values_dict: HashMap<DbID, Vec<(DbID, &str, DbID)>> = HashMap::new();
-        for row in &facet_values {
-            let key = row.get::<usize, DbID>(0);
-            let value = (
-                row.get::<usize, DbID>(1),
-                row.get::<usize, &str>(2),
-                row.get::<usize, DbID>(3),
-            );
-            if facet_values_dict.contains_key(&key) {
-                if let Some(v) = facet_values_dict.get_mut(&key) {
-                    v.push(value);
-                }
-            } else {
-                facet_values_dict.insert(key, vec![value]);
+        for source in &re_source_ref {
+            source_counter.insert(Bucket(
+                *chrom_keys
+                    .get(source.2.strip_prefix("chr").unwrap())
+                    .unwrap(),
+                bucket(source.3.lower().unwrap().value as u32),
+            ));
+
+            for source_facets in &source_facet_dict.get(&source.0) {
+                source_facets
+                    .iter()
+                    .filter(|f| source_facet_ids.contains(&f.2))
+                    .for_each(|f| drop(source_disc_facets.insert(f.0)));
             }
         }
 
-        let sources = client.query(&re_sources_statement, &[&reg_effect_id_list])?;
-        let mut source_dict: HashMap<
-            DbID,
-            Vec<(DbID, Option<Json<HashMap<&str, f32>>>, &str, Range<i32>)>,
-        > = HashMap::new();
-        for row in &sources {
-            let key = row.get::<usize, DbID>(0);
-            let value = (
-                row.get::<usize, DbID>(1),
-                row.get::<usize, Option<Json<HashMap<&str, f32>>>>(2),
-                row.get::<usize, &str>(3),
-                row.get::<usize, Range<i32>>(4),
-            );
-            if source_dict.contains_key(&key) {
-                if let Some(v) = source_dict.get_mut(&key) {
-                    v.push(value);
-                }
-            } else {
-                source_dict.insert(key, vec![value]);
-            }
-        }
+        let disc_facets = &reg_disc_facets | &source_disc_facets;
 
-        let targets = client.query(&re_targets_statement, &[&reg_effect_id_list])?;
-        let mut target_dict: HashMap<DbID, Vec<(DbID, &str, Range<i32>, &str)>> = HashMap::new();
-        for row in &targets {
-            let key = row.get::<usize, DbID>(0);
-            let value = (
-                row.get::<usize, DbID>(1),
-                row.get::<usize, &str>(2),
-                row.get::<usize, Range<i32>>(3),
-                row.get::<usize, &str>(4),
-            );
-            if target_dict.contains_key(&key) {
-                if let Some(v) = target_dict.get_mut(&key) {
-                    v.push(value);
-                }
-            } else {
-                target_dict.insert(key, vec![value]);
-            }
-        }
-
-        let source_id_list = sources
-            .iter()
-            .map(|row| row.get::<&str, DbID>("id"))
-            .collect::<Vec<DbID>>();
-        let source_facets = client.query(&source_facet_statement, &[&source_id_list])?;
-        let mut source_facet_dict: HashMap<DbID, Vec<(DbID, &str, DbID)>> = HashMap::new();
-        for row in &source_facets {
-            let key = row.get::<usize, DbID>(0);
-            let value = (
-                row.get::<usize, DbID>(1),
-                row.get::<usize, &str>(2),
-                row.get::<usize, DbID>(3),
-            );
-            if source_facet_dict.contains_key(&key) {
-                if let Some(v) = source_facet_dict.get_mut(&key) {
-                    v.push(value);
-                }
-            } else {
-                source_facet_dict.insert(key, vec![value]);
-            }
-        }
-
-        for re_id in reg_effect_id_list {
-            // If we are targeting a specific chromosome filter out sources not in that chromosome.
-            // They won't be visible in the visualization and the bucket index will be wrong.
-            let re_source = source_dict.get(&re_id).unwrap();
-            let re_facets = reg_effect_num_facets.get(&re_id).unwrap();
-            let effect_size = *re_facets.get(FACET_EFFECT_SIZE).unwrap();
-            let significance = *re_facets.get(FACET_SIGNIFICANCE).unwrap();
-            let all_chromos = match options.chromo {
-                Some(_) => false,
-                None => true,
+        for target in target_dict.get(&re_id).unwrap() {
+            let chrom_name = target.1.strip_prefix("chr").unwrap();
+            let target_start = match target.3 {
+                "-" => target.2.upper().unwrap().value,
+                _ => target.2.lower().unwrap().value,
             };
-            let re_source_ref = Vec::from_iter(
-                re_source
-                    .iter()
-                    .filter(|s| all_chromos || s.2 == options.chromo.unwrap()),
-            );
-            let mut source_counter: HashSet<Bucket> = HashSet::new();
-            let mut target_counter: HashSet<Bucket> = HashSet::new();
+            let target_bucket = bucket(target_start as u32);
+            target_counter.insert(Bucket(*chrom_keys.get(chrom_name).unwrap(), target_bucket));
 
-            let mut source_disc_facets: HashSet<DbID> = HashSet::new();
-            let mut reg_disc_facets: HashSet<DbID> = HashSet::new();
-
-            for facets in facet_values_dict.get(&re_id) {
-                facets
-                    .iter()
-                    .filter(|f| f.2 == dir_facet.id)
-                    .for_each(|f| drop(reg_disc_facets.insert(f.0)));
-            }
-
-            for source in &re_source_ref {
-                source_counter.insert(Bucket(
-                    *chrom_keys
-                        .get(source.2.strip_prefix("chr").unwrap())
-                        .unwrap(),
-                    bucket(source.3.lower().unwrap().value as u32),
+            {
+                let mut target_info = target_buckets
+                    .get_mut(chrom_name)
+                    .unwrap()
+                    .get_mut(target_bucket as usize)
+                    .unwrap()
+                    .borrow_mut();
+                target_info.add_facets(RegEffectFacets(
+                    disc_facets.clone(),
+                    effect_size,
+                    significance,
                 ));
-
-                for source_facets in &source_facet_dict.get(&source.0) {
-                    source_facets
-                        .iter()
-                        .filter(|f| source_facet_ids.contains(&f.2))
-                        .for_each(|f| drop(source_disc_facets.insert(f.0)));
-                }
+                target_info.update_buckets(&source_counter);
             }
-
-            let disc_facets = &reg_disc_facets | &source_disc_facets;
-
-            for target in target_dict.get(&re_id).unwrap() {
-                let chrom_name = target.1.strip_prefix("chr").unwrap();
-                let target_start = match target.3 {
-                    "-" => target.2.upper().unwrap().value,
-                    _ => target.2.lower().unwrap().value,
-                };
-                let target_bucket = bucket(target_start as u32);
-                target_counter.insert(Bucket(*chrom_keys.get(chrom_name).unwrap(), target_bucket));
-
-                {
-                    let mut target_info = target_buckets
-                        .get_mut(chrom_name)
-                        .unwrap()
-                        .get_mut(target_bucket as usize)
-                        .unwrap()
-                        .borrow_mut();
-                    target_info.add_facets(RegEffectFacets(
-                        disc_facets.clone(),
-                        effect_size,
-                        significance,
-                    ));
-                    target_info.update_buckets(&source_counter);
-                }
-            }
-
-            for source in &re_source_ref {
-                let chrom_name = source.2.strip_prefix("chr").unwrap();
-
-                let source_bucket = bucket(source.3.lower().unwrap().value as u32);
-
-                {
-                    let mut source_info = source_buckets
-                        .get_mut(chrom_name)
-                        .unwrap()
-                        .get_mut(source_bucket as usize)
-                        .unwrap()
-                        .borrow_mut();
-                    source_info.add_facets(RegEffectFacets(
-                        disc_facets.clone(),
-                        effect_size,
-                        significance,
-                    ));
-                    source_info.update_buckets(&target_counter);
-                }
-            }
-
-            facet_ids.extend(&disc_facets);
         }
+
+        for source in &re_source_ref {
+            let chrom_name = source.2.strip_prefix("chr").unwrap();
+
+            let source_bucket = bucket(source.3.lower().unwrap().value as u32);
+
+            {
+                let mut source_info = source_buckets
+                    .get_mut(chrom_name)
+                    .unwrap()
+                    .get_mut(source_bucket as usize)
+                    .unwrap()
+                    .borrow_mut();
+                source_info.add_facets(RegEffectFacets(
+                    disc_facets.clone(),
+                    effect_size,
+                    significance,
+                ));
+                source_info.update_buckets(&target_counter);
+            }
+        }
+
+        facet_ids.extend(&disc_facets);
     }
 
     println!(
@@ -421,7 +416,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         }
     }
 
-    // # These are the facets we use for this data
+    // These are all the facets that are potentially relevant for coverage filtering
     let experiment_facet_coverages = facet_set();
     let experiment_facet_names: HashSet<&str> = HashSet::from([
         FACET_DIRECTION,
