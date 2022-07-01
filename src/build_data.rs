@@ -86,6 +86,7 @@ fn select_assembly<'a>(
     };
 
     if let Some(chromo) = chromo {
+        let chromo = chromo.strip_prefix("chr").unwrap();
         assembly_info = assembly_info
             .into_iter()
             .filter(|c| c.0 == chromo)
@@ -156,17 +157,41 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
             facet_id: r.get::<&str, DbID>("facet_id"),
         })
         .collect();
-    // (id: DbID, numeric facets: Json)
-    let reg_effects_statement = client.prepare("SELECT search_regulatoryeffect.id, search_regulatoryeffect.facet_num_values FROM search_regulatoryeffect INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id) WHERE search_experiment.accession_id = $1")?;
+
     // (re id: DbID, facet value id: DbID, value: &str, facet id: DbID)
-    let facet_values_statement = client.prepare("SELECT (search_regulatoryeffect_facet_values.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_facetvalue.id, search_facetvalue.value, search_facetvalue.facet_id FROM search_facetvalue INNER JOIN search_regulatoryeffect_facet_values ON (search_facetvalue.id = search_regulatoryeffect_facet_values.facetvalue_id) WHERE search_regulatoryeffect_facet_values.regulatoryeffect_id = ANY($1)")?;
+    let facet_values_statement = client.prepare(r#"
+        SELECT (search_regulatoryeffect_facet_values.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_facetvalue.id, search_facetvalue.value, search_facetvalue.facet_id
+        FROM search_facetvalue
+        INNER JOIN search_regulatoryeffect_facet_values ON (search_facetvalue.id = search_regulatoryeffect_facet_values.facetvalue_id)
+        WHERE search_regulatoryeffect_facet_values.regulatoryeffect_id = ANY($1)"#
+    )?;
     // (re id: DbID, dnaregion id: DbID, numeric facets: Json, chrom name: &str, location: Range(i32))
-    let re_sources_statement = client.prepare("SELECT (search_regulatoryeffect_sources.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_dnaregion.id, search_dnaregion.facet_num_values, search_dnaregion.chrom_name, search_dnaregion.location FROM search_dnaregion INNER JOIN search_regulatoryeffect_sources ON (search_dnaregion.id = search_regulatoryeffect_sources.dnaregion_id) WHERE search_regulatoryeffect_sources.regulatoryeffect_id = ANY($1)")?;
+    let re_sources_statement = client.prepare(r#"
+        SELECT (search_regulatoryeffect_sources.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_dnaregion.id, search_dnaregion.facet_num_values, search_dnaregion.chrom_name, search_dnaregion.location
+        FROM search_dnaregion
+        INNER JOIN search_regulatoryeffect_sources ON (search_dnaregion.id = search_regulatoryeffect_sources.dnaregion_id)
+        WHERE search_regulatoryeffect_sources.regulatoryeffect_id = ANY($1)"#
+    )?;
     // (re id: DbID, feature assembly id: DbID, chrom name: &str, location: Range(i32), strand: &str)
-    let re_targets_statement = client.prepare("SELECT (search_regulatoryeffect_target_assemblies.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_featureassembly.id, search_featureassembly.chrom_name, search_featureassembly.location, search_featureassembly.strand FROM search_featureassembly INNER JOIN search_regulatoryeffect_target_assemblies ON (search_featureassembly.id = search_regulatoryeffect_target_assemblies.featureassembly_id) WHERE search_regulatoryeffect_target_assemblies.regulatoryeffect_id = ANY($1)")?;
+    let re_targets_statement = client.prepare(r#"
+        SELECT (search_regulatoryeffect_target_assemblies.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_featureassembly.id, search_featureassembly.chrom_name, search_featureassembly.location, search_featureassembly.strand
+        FROM search_featureassembly
+        INNER JOIN search_regulatoryeffect_target_assemblies ON (search_featureassembly.id = search_regulatoryeffect_target_assemblies.featureassembly_id)
+        WHERE search_regulatoryeffect_target_assemblies.regulatoryeffect_id = ANY($1)"#
+    )?;
     // (source id: DbID, facet value id: DbID, value: &str, facet id: DbID)
-    let source_facet_statement = client.prepare("SELECT (search_dnaregion_facet_values.dnaregion_id) AS _prefetch_related_val_dnaregion_id, search_facetvalue.id, search_facetvalue.value, search_facetvalue.facet_id FROM search_facetvalue INNER JOIN search_dnaregion_facet_values ON (search_facetvalue.id = search_dnaregion_facet_values.facetvalue_id) WHERE search_dnaregion_facet_values.dnaregion_id = ANY($1)")?;
-    let facet_range_statement = client.prepare("SELECT MIN(((search_regulatoryeffect.facet_num_values -> $1))::double precision) AS min, MAX(((search_regulatoryeffect.facet_num_values -> $1))::double precision) AS max FROM search_regulatoryeffect INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id) WHERE search_experiment.accession_id = $2")?;
+    let source_facet_statement = client.prepare(r#"
+        SELECT (search_dnaregion_facet_values.dnaregion_id) AS _prefetch_related_val_dnaregion_id, search_facetvalue.id, search_facetvalue.value, search_facetvalue.facet_id
+        FROM search_facetvalue
+        INNER JOIN search_dnaregion_facet_values ON (search_facetvalue.id = search_dnaregion_facet_values.facetvalue_id)
+        WHERE search_dnaregion_facet_values.dnaregion_id = ANY($1)"#
+    )?;
+    let facet_range_statement = client.prepare(r#"
+        SELECT MIN(((search_regulatoryeffect.facet_num_values -> $1))::double precision) AS min, MAX(((search_regulatoryeffect.facet_num_values -> $1))::double precision) AS max
+        FROM search_regulatoryeffect
+        INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)
+        WHERE search_experiment.accession_id = $2"#
+    )?;
     let dir_facet = all_facets
         .iter()
         .find(|f| f.name == FACET_DIRECTION)
@@ -193,7 +218,25 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
     let re_start_time = Instant::now();
 
-    let reg_effects = client.query(&reg_effects_statement, &[&options.experiment_accession_id])?;
+    // (id: DbID, numeric facets: Json)
+    let reg_effects_statement = client.prepare(r#"
+        SELECT search_regulatoryeffect.id, search_regulatoryeffect.facet_num_values
+        FROM search_regulatoryeffect
+        INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)
+        WHERE search_experiment.accession_id = $1"#
+    )?;
+    let reg_effects_chromo_statement = client.prepare(r#"
+        SELECT search_regulatoryeffect.id, search_regulatoryeffect.facet_num_values
+        FROM search_regulatoryeffect
+        INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)
+        INNER JOIN search_regulatoryeffect_target_assemblies as re_ta ON (search_regulatoryeffect.id = re_ta.regulatoryeffect_id)
+        INNER JOIN search_featureassembly as fa ON (fa.id = re_ta.featureassembly_id)
+        WHERE search_experiment.accession_id = $1 and fa.chrom_name = $2"#
+    )?;
+    let reg_effects = match options.chromo {
+        None => client.query(&reg_effects_statement, &[&options.experiment_accession_id])?,
+        Some(chromo) => client.query(&reg_effects_chromo_statement, &[&options.experiment_accession_id, &chromo])?,
+    };
     let mut reg_effect_num_facets: HashMap<DbID, HashMap<&str, f32>> = HashMap::new();
     for row in &reg_effects {
         let key = row.get::<usize, DbID>(0);
@@ -287,7 +330,24 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         }
     }
 
-    let re_count: i64 = client.query_one("SELECT COUNT(*) AS count FROM search_regulatoryeffect INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id) WHERE search_experiment.accession_id = $1", &[&options.experiment_accession_id])?.get("count");
+    let re_count: i64 = match options.chromo {
+        None => client.query_one(r#"
+            SELECT COUNT(*) AS count
+            FROM search_regulatoryeffect
+            INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)
+            WHERE search_experiment.accession_id = $1"#,
+        &[&options.experiment_accession_id]
+        )?,
+        Some(chromo) => client.query_one(r#"
+            SELECT COUNT(*) AS count
+            FROM search_regulatoryeffect
+            INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)INNER JOIN search_regulatoryeffect_target_assemblies as re_ta ON (search_regulatoryeffect.id = re_ta.regulatoryeffect_id)
+            INNER JOIN search_featureassembly as fa ON (fa.id = re_ta.featureassembly_id)
+            WHERE search_experiment.accession_id = $1 and fa.chrom_name = $2"#,
+        &[&options.experiment_accession_id, &chromo]
+        )?,
+    }.get("count");
+
     println!("Regulatory Effect count: {}", re_count);
 
     // For each regulatory effect we want to add all the facets associated with the effect itself,
@@ -400,6 +460,9 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         let chrom_data = chrom_data.get_mut(i).unwrap();
         for j in 0..source_buckets.get(chrom_name).unwrap().len() {
             let source_bucket = source_buckets.get(chrom_name).unwrap().get(j).unwrap();
+            if source_bucket.borrow().facets.len() == 0 {
+                continue;
+            }
             let source = Interval {
                 start: options.bucket_size * (j as u32) + 1,
                 values: Rc::clone(source_bucket),
@@ -408,6 +471,9 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         }
         for j in 0..target_buckets.get(chrom_name).unwrap().len() {
             let target_bucket = target_buckets.get(chrom_name).unwrap().get(j).unwrap();
+            if target_bucket.borrow().facets.len() == 0 {
+                continue;
+            }
             let target = Interval {
                 start: options.bucket_size * (j as u32) + 1,
                 values: Rc::clone(target_bucket),

@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct Options<'a> {
     pub output_location: &'a String,
     pub experiment_accession_id: &'a String,

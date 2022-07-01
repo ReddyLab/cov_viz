@@ -10,7 +10,7 @@ use crate::data_structures::CoverageData;
 pub fn serialize(data: &CoverageData, chromo: Option<&String>, output_location: &String) {
     let bincode_options = bincode::DefaultOptions::new().with_no_limit();
     let output_file = match chromo {
-        Some(chrom_name) => format!("level2_{}.bin", chrom_name),
+        Some(chrom_name) => format!("level2_{}.bin", chrom_name.strip_prefix("chr").unwrap()),
         None => "level1.bin".to_string(),
     };
     let path: PathBuf = [output_location, &output_file].iter().collect();
