@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::data_structures::Options;
+use std::collections::HashMap;
 
 const DATABASE_URL_KEY: &str = "DATABASE_URL";
 

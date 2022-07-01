@@ -1,8 +1,8 @@
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
 use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeStruct, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::data_structures::{ChromosomeData, Facet};
 
@@ -89,7 +89,9 @@ impl<'de> Deserialize<'de> for CoverageData {
                     match key {
                         Field::Chromosomes => {
                             if chromosomes.is_some() {
-                                return Err(de::Error::duplicate_field(COVERAGE_DATA_FIELD_CHROMOSOMES));
+                                return Err(de::Error::duplicate_field(
+                                    COVERAGE_DATA_FIELD_CHROMOSOMES,
+                                ));
                             }
                             chromosomes = Some(map.next_value()?);
                         }
@@ -101,14 +103,16 @@ impl<'de> Deserialize<'de> for CoverageData {
                         }
                     }
                 }
-                let chromosomes =
-                    chromosomes.ok_or_else(|| de::Error::missing_field(COVERAGE_DATA_FIELD_CHROMOSOMES))?;
-                let facets = facets.ok_or_else(|| de::Error::missing_field(COVERAGE_DATA_FIELD_FACETS))?;
+                let chromosomes = chromosomes
+                    .ok_or_else(|| de::Error::missing_field(COVERAGE_DATA_FIELD_CHROMOSOMES))?;
+                let facets =
+                    facets.ok_or_else(|| de::Error::missing_field(COVERAGE_DATA_FIELD_FACETS))?;
                 Ok(CoverageData::new(chromosomes, facets))
             }
         }
 
-        const FIELDS: &'static [&'static str] = &[COVERAGE_DATA_FIELD_CHROMOSOMES, COVERAGE_DATA_FIELD_FACETS];
+        const FIELDS: &'static [&'static str] =
+            &[COVERAGE_DATA_FIELD_CHROMOSOMES, COVERAGE_DATA_FIELD_FACETS];
         deserializer.deserialize_struct("CoverageData", FIELDS, CoverageDataVisitor)
     }
 }

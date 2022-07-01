@@ -3,9 +3,9 @@ use std::fmt;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use serde::{Deserialize, Serialize};
 use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeStruct, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::data_structures::RegEffectData;
 

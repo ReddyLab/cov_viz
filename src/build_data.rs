@@ -7,10 +7,13 @@ use postgres::types::Json;
 use postgres::{Client, Error};
 use postgres_range::Range;
 
+use crate::data_structures::facets::{
+    facet_set, FACET_CCRE_CATEGORY, FACET_CCRE_OVERLAP, FACET_DIRECTION, FACET_EFFECT_SIZE,
+    FACET_GRNA_TYPE, FACET_SIGNIFICANCE, FACET_TYPE_DISCRETE,
+};
 use crate::data_structures::*;
-use crate::data_structures::facets::{facet_set, FACET_CCRE_CATEGORY, FACET_CCRE_OVERLAP, FACET_DIRECTION, FACET_EFFECT_SIZE, FACET_GRNA_TYPE, FACET_SIGNIFICANCE, FACET_TYPE_DISCRETE};
-use crate::DbID;
 use crate::utils::print_pct_complete;
+use crate::DbID;
 
 const GRCH38: [(&str, i32); 25] = [
     ("1", 248956422),
@@ -234,7 +237,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
         let sources = client.query(&re_sources_statement, &[&reg_effect_id_list])?;
         let mut source_dict: HashMap<
-        DbID,
+            DbID,
             Vec<(DbID, Option<Json<HashMap<&str, f32>>>, &str, Range<i32>)>,
         > = HashMap::new();
         for row in &sources {
@@ -429,11 +432,19 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         FACET_GRNA_TYPE,
     ]);
 
-    // This is kind of complicated, but the idea is to filter out facets that are in the database, but aren't
-    // used to annotate data for this particular experiment.
+    // The idea is to filter out facets that are in the database, but aren't used to annotate
+    // data for this particular experiment.
     let mut facets = Vec::<&Facet>::new();
-    for facet in all_facets.iter_mut().filter(|f| experiment_facet_names.contains(f.name.as_str())) {
-        facet.coverage = Some(experiment_facet_coverages.get(facet.name.as_str()).unwrap().clone());
+    for facet in all_facets
+        .iter_mut()
+        .filter(|f| experiment_facet_names.contains(f.name.as_str()))
+    {
+        facet.coverage = Some(
+            experiment_facet_coverages
+                .get(facet.name.as_str())
+                .unwrap()
+                .clone(),
+        );
         if facet.facet_type == FACET_TYPE_DISCRETE {
             let facet_values: HashMap<DbID, String> = all_facet_values
                 .iter()
