@@ -3,6 +3,7 @@ name = "cov_viz"
 description = "Generate data used by the CCGR Portal experiment coverage visualizer"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
