@@ -235,7 +235,10 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     )?;
     let reg_effects = match options.chromo {
         None => client.query(&reg_effects_statement, &[&options.experiment_accession_id])?,
-        Some(chromo) => client.query(&reg_effects_chromo_statement, &[&options.experiment_accession_id, &chromo])?,
+        Some(chromo) => client.query(
+            &reg_effects_chromo_statement,
+            &[&options.experiment_accession_id, &chromo],
+        )?,
     };
     let mut reg_effect_num_facets: HashMap<DbID, HashMap<&str, f32>> = HashMap::new();
     for row in &reg_effects {

@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::data_structures::{ChromosomeData, Facet};
 
+pub mod serialize;
+
 #[derive(Debug)]
 pub struct CoverageData {
     pub chromosomes: Vec<ChromosomeData>,
