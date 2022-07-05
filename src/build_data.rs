@@ -7,6 +7,8 @@ use postgres::types::Json;
 use postgres::{Client, Error};
 use postgres_range::Range;
 
+use crate::options::Options;
+
 use crate::data_structures::facets::{
     facet_set, FACET_CCRE_CATEGORY, FACET_CCRE_OVERLAP, FACET_DIRECTION, FACET_EFFECT_SIZE,
     FACET_GRNA_TYPE, FACET_SIGNIFICANCE, FACET_TYPE_DISCRETE,
@@ -71,7 +73,7 @@ const GRCH37: [(&str, i32); 25] = [
 
 fn select_assembly<'a>(
     assembly_name: &'a str,
-    chromo: Option<&'a String>,
+    chromo: &Option<String>,
 ) -> Vec<(&'static str, i32)> {
     let mut assembly_info = match assembly_name {
         "GRCH37" => GRCH37.to_vec(),
@@ -99,7 +101,7 @@ fn select_assembly<'a>(
 pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData, Error> {
     let bucket = |size: u32| size / options.bucket_size;
 
-    let assembly_info = select_assembly(options.assembly_name, options.chromo);
+    let assembly_info = select_assembly(&options.assembly_name, &options.chromo);
 
     let mut chrom_keys: HashMap<&str, usize> = HashMap::new();
     for i in 0..assembly_info.len() {
@@ -233,7 +235,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         INNER JOIN search_featureassembly as fa ON (fa.id = re_ta.featureassembly_id)
         WHERE search_experiment.accession_id = $1 and fa.chrom_name = $2"#
     )?;
-    let reg_effects = match options.chromo {
+    let reg_effects = match &options.chromo {
         None => client.query(&reg_effects_statement, &[&options.experiment_accession_id])?,
         Some(chromo) => client.query(
             &reg_effects_chromo_statement,
@@ -333,7 +335,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         }
     }
 
-    let re_count: i64 = match options.chromo {
+    let re_count: i64 = match &options.chromo {
         None => client.query_one(r#"
             SELECT COUNT(*) AS count
             FROM search_regulatoryeffect
@@ -371,7 +373,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         let re_source_ref = Vec::from_iter(
             re_source
                 .iter()
-                .filter(|s| all_chromos || s.2 == options.chromo.unwrap()),
+                .filter(|s| all_chromos || s.2 == options.chromo.as_ref().unwrap()),
         );
         let mut source_counter: HashSet<Bucket> = HashSet::new();
         let mut target_counter: HashSet<Bucket> = HashSet::new();
