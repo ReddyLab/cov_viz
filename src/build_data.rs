@@ -1,6 +1,5 @@
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use postgres::types::Json;
@@ -108,21 +107,23 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         chrom_keys.insert(assembly_info[i].0, i);
     }
 
-    let mut source_buckets: HashMap<&str, Vec<Rc<RefCell<RegEffectData>>>> = HashMap::new();
+    let mut source_buckets: HashMap<&str, Vec<Arc<Mutex<HashMap<DbID, RegEffectData>>>>> =
+        HashMap::new();
     for chrom in &assembly_info {
         source_buckets.insert(
             chrom.0,
             (0..(bucket(chrom.1 as u32) + 1))
-                .map(|_| Rc::new(RefCell::new(RegEffectData::new())))
+                .map(|_| Arc::new(Mutex::new(HashMap::new())))
                 .collect(),
         );
     }
-    let mut target_buckets: HashMap<&str, Vec<Rc<RefCell<RegEffectData>>>> = HashMap::new();
+    let mut target_buckets: HashMap<&str, Vec<Arc<Mutex<HashMap<DbID, RegEffectData>>>>> =
+        HashMap::new();
     for chrom in &assembly_info {
         target_buckets.insert(
             chrom.0,
             (0..(bucket(chrom.1 as u32) + 1))
-                .map(|_| Rc::new(RefCell::new(RegEffectData::new())))
+                .map(|_| Arc::new(Mutex::new(HashMap::new())))
                 .collect(),
         );
     }
@@ -416,12 +417,14 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
             target_counter.insert(Bucket(*chrom_keys.get(chrom_name).unwrap(), target_bucket));
 
             {
-                let mut target_info = target_buckets
+                let mut targets = target_buckets
                     .get_mut(chrom_name)
                     .unwrap()
                     .get_mut(target_bucket as usize)
                     .unwrap()
-                    .borrow_mut();
+                    .lock()
+                    .unwrap();
+                let target_info = targets.entry(target.0).or_insert(RegEffectData::new());
                 target_info.add_facets(RegEffectFacets(
                     disc_facets.clone(),
                     effect_size,
@@ -437,12 +440,14 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
             let source_bucket = bucket(source.3.lower().unwrap().value as u32);
 
             {
-                let mut source_info = source_buckets
+                let mut sources = source_buckets
                     .get_mut(chrom_name)
                     .unwrap()
                     .get_mut(source_bucket as usize)
                     .unwrap()
-                    .borrow_mut();
+                    .lock()
+                    .unwrap();
+                let source_info = sources.entry(source.0).or_insert(RegEffectData::new());
                 source_info.add_facets(RegEffectFacets(
                     disc_facets.clone(),
                     effect_size,
@@ -460,28 +465,30 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         re_start_time.elapsed().as_secs()
     );
 
-    for i in 0..assembly_info.len() {
-        let chrom_name = assembly_info[i].0;
+    for (i, info) in assembly_info.iter().enumerate() {
+        let chrom_name = info.0;
         let chrom_data = chrom_data.get_mut(i).unwrap();
-        for j in 0..source_buckets.get(chrom_name).unwrap().len() {
-            let source_bucket = source_buckets.get(chrom_name).unwrap().get(j).unwrap();
-            if source_bucket.borrow().facets.len() == 0 {
-                continue;
+        for (j, source_bucket) in source_buckets.get(chrom_name).unwrap().iter().enumerate() {
+            {
+                if source_bucket.lock().unwrap().len() == 0 {
+                    continue;
+                }
             }
             let source = Interval {
                 start: options.bucket_size * (j as u32) + 1,
-                values: Rc::clone(source_bucket),
+                values: Arc::clone(source_bucket),
             };
             chrom_data.source_intervals.push(source);
         }
-        for j in 0..target_buckets.get(chrom_name).unwrap().len() {
-            let target_bucket = target_buckets.get(chrom_name).unwrap().get(j).unwrap();
-            if target_bucket.borrow().facets.len() == 0 {
-                continue;
+        for (j, target_bucket) in target_buckets.get(chrom_name).unwrap().iter().enumerate() {
+            {
+                if target_bucket.lock().unwrap().len() == 0 {
+                    continue;
+                }
             }
             let target = Interval {
                 start: options.bucket_size * (j as u32) + 1,
-                values: Rc::clone(target_bucket),
+                values: Arc::clone(target_bucket),
             };
             chrom_data.target_intervals.push(target);
         }
