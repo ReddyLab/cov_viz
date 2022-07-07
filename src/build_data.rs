@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use postgres::types::Json;
@@ -107,23 +106,21 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         chrom_keys.insert(assembly_info[i].0, i);
     }
 
-    let mut source_buckets: HashMap<&str, Vec<Arc<Mutex<HashMap<DbID, RegEffectData>>>>> =
-        HashMap::new();
+    let mut source_buckets: HashMap<&str, Vec<HashMap<DbID, RegEffectData>>> = HashMap::new();
     for chrom in &assembly_info {
         source_buckets.insert(
             chrom.0,
             (0..(bucket(chrom.1 as u32) + 1))
-                .map(|_| Arc::new(Mutex::new(HashMap::new())))
+                .map(|_| HashMap::new())
                 .collect(),
         );
     }
-    let mut target_buckets: HashMap<&str, Vec<Arc<Mutex<HashMap<DbID, RegEffectData>>>>> =
-        HashMap::new();
+    let mut target_buckets: HashMap<&str, Vec<HashMap<DbID, RegEffectData>>> = HashMap::new();
     for chrom in &assembly_info {
         target_buckets.insert(
             chrom.0,
             (0..(bucket(chrom.1 as u32) + 1))
-                .map(|_| Arc::new(Mutex::new(HashMap::new())))
+                .map(|_| HashMap::new())
                 .collect(),
         );
     }
@@ -417,12 +414,10 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
             target_counter.insert(Bucket(*chrom_keys.get(chrom_name).unwrap(), target_bucket));
 
             {
-                let mut targets = target_buckets
+                let targets = target_buckets
                     .get_mut(chrom_name)
                     .unwrap()
                     .get_mut(target_bucket as usize)
-                    .unwrap()
-                    .lock()
                     .unwrap();
                 let target_info = targets.entry(target.0).or_insert(RegEffectData::new());
                 target_info.add_facets(RegEffectFacets(
@@ -440,12 +435,10 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
             let source_bucket = bucket(source.3.lower().unwrap().value as u32);
 
             {
-                let mut sources = source_buckets
+                let sources = source_buckets
                     .get_mut(chrom_name)
                     .unwrap()
                     .get_mut(source_bucket as usize)
-                    .unwrap()
-                    .lock()
                     .unwrap();
                 let source_info = sources.entry(source.0).or_insert(RegEffectData::new());
                 source_info.add_facets(RegEffectFacets(
@@ -470,25 +463,25 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         let chrom_data = chrom_data.get_mut(i).unwrap();
         for (j, source_bucket) in source_buckets.get(chrom_name).unwrap().iter().enumerate() {
             {
-                if source_bucket.lock().unwrap().len() == 0 {
+                if source_bucket.len() == 0 {
                     continue;
                 }
             }
             let source = Interval {
                 start: options.bucket_size * (j as u32) + 1,
-                values: Arc::clone(source_bucket),
+                values: source_bucket.clone(),
             };
             chrom_data.source_intervals.push(source);
         }
         for (j, target_bucket) in target_buckets.get(chrom_name).unwrap().iter().enumerate() {
             {
-                if target_bucket.lock().unwrap().len() == 0 {
+                if target_bucket.len() == 0 {
                     continue;
                 }
             }
             let target = Interval {
                 start: options.bucket_size * (j as u32) + 1,
-                values: Arc::clone(target_bucket),
+                values: target_bucket.clone(),
             };
             chrom_data.target_intervals.push(target);
         }

@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::ops::Deref;
-use std::sync::{Arc, Mutex};
 
 use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeStruct, Serializer};
@@ -13,7 +11,7 @@ use crate::DbID;
 #[derive(Debug)]
 pub struct Interval {
     pub start: u32,
-    pub values: Arc<Mutex<HashMap<DbID, RegEffectData>>>,
+    pub values: HashMap<DbID, RegEffectData>,
 }
 
 const INTERVAL_FIELD_START: &str = "start";
@@ -23,7 +21,7 @@ impl Interval {
     fn new(start: u32, values: HashMap<DbID, RegEffectData>) -> Self {
         let i = Interval {
             start: start,
-            values: Arc::new(Mutex::new(values)),
+            values: values,
         };
 
         i
@@ -38,8 +36,7 @@ impl Serialize for Interval {
         let mut state = serializer.serialize_struct("Interval", 2)?;
         state.serialize_field(INTERVAL_FIELD_START, &self.start)?;
         {
-            let values = self.values.lock().unwrap();
-            state.serialize_field(INTERVAL_FIELD_VALUES, values.deref())?;
+            state.serialize_field(INTERVAL_FIELD_VALUES, &self.values)?;
         }
 
         state.end()
