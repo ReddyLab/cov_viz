@@ -18,8 +18,8 @@ pub enum FacetCoverage {
     Source,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct FacetRange(pub f64, pub f64);
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+pub struct FacetRange(pub f32, pub f32);
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Facet {

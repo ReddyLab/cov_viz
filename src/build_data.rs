@@ -534,8 +534,8 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 &[&FACET_EFFECT_SIZE, &options.experiment_accession_id],
             )?;
             facet.range = Some(FacetRange(
-                facet_range_row.get("min"),
-                facet_range_row.get("max"),
+                facet_range_row.get::<&str, f64>("min") as f32,
+                facet_range_row.get::<&str, f64>("max") as f32,
             ));
         } else if facet.name == FACET_SIGNIFICANCE {
             let facet_range_row = client.query_one(
@@ -543,8 +543,8 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 &[&FACET_SIGNIFICANCE, &options.experiment_accession_id],
             )?;
             facet.range = Some(FacetRange(
-                facet_range_row.get("min"),
-                facet_range_row.get("max"),
+                facet_range_row.get::<&str, f64>("min") as f32,
+                facet_range_row.get::<&str, f64>("max") as f32,
             ));
         }
 
