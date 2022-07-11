@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-use crate::DbID;
+use crate::data_structures::DbID;
 
 pub const FACET_DIRECTION: &str = "Direction";
 pub const FACET_EFFECT_SIZE: &str = "Effect Size";

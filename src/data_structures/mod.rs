@@ -9,3 +9,5 @@ pub use coverage_data::CoverageData;
 pub use facets::{Facet, FacetCoverage, FacetRange, FacetValue};
 pub use interval::Interval;
 pub use regeffects::{Bucket, RegEffectData, RegEffectFacets};
+
+pub type DbID = i64;

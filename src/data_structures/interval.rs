@@ -5,8 +5,8 @@ use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 
+use crate::data_structures::DbID;
 use crate::data_structures::RegEffectData;
-use crate::DbID;
 
 #[derive(Debug)]
 pub struct Interval {

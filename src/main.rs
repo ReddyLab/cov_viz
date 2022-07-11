@@ -10,8 +10,6 @@ use postgres::{Client, NoTls};
 use crate::build_data::build_data;
 use crate::options::Options;
 
-type DbID = i64;
-
 fn main() {
     let options = Options::get();
 

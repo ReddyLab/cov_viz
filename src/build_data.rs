@@ -12,7 +12,6 @@ use crate::data_structures::facets::{
     FACET_GRNA_TYPE, FACET_SIGNIFICANCE, FACET_TYPE_DISCRETE,
 };
 use crate::data_structures::*;
-use crate::DbID;
 
 const GRCH38: [(&str, i32); 25] = [
     ("1", 248956422),
