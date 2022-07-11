@@ -1,9 +1,9 @@
-use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use postgres::types::Json;
 use postgres::{Client, Error};
 use postgres_range::Range;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::options::Options;
 
@@ -100,26 +100,28 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
     let assembly_info = select_assembly(&options.assembly_name, &options.chromo);
 
-    let mut chrom_keys: HashMap<&str, usize> = HashMap::new();
+    let mut chrom_keys: FxHashMap<&str, usize> = FxHashMap::default();
     for i in 0..assembly_info.len() {
         chrom_keys.insert(assembly_info[i].0, i);
     }
 
-    let mut source_buckets: HashMap<&str, Vec<HashMap<DbID, RegEffectData>>> = HashMap::new();
+    let mut source_buckets: FxHashMap<&str, Vec<FxHashMap<DbID, RegEffectData>>> =
+        FxHashMap::default();
     for chrom in &assembly_info {
         source_buckets.insert(
             chrom.0,
             (0..(bucket(chrom.1 as u32) + 1))
-                .map(|_| HashMap::new())
+                .map(|_| FxHashMap::default())
                 .collect(),
         );
     }
-    let mut target_buckets: HashMap<&str, Vec<HashMap<DbID, RegEffectData>>> = HashMap::new();
+    let mut target_buckets: FxHashMap<&str, Vec<FxHashMap<DbID, RegEffectData>>> =
+        FxHashMap::default();
     for chrom in &assembly_info {
         target_buckets.insert(
             chrom.0,
             (0..(bucket(chrom.1 as u32) + 1))
-                .map(|_| HashMap::new())
+                .map(|_| FxHashMap::default())
                 .collect(),
         );
     }
@@ -207,13 +209,16 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         .iter()
         .find(|f| f.name == FACET_GRNA_TYPE)
         .unwrap();
-    let source_facet_ids: HashSet<DbID> = HashSet::from([
-        ccre_overlap_facet.id,
-        ccre_category_facet.id,
-        grna_type_facet.id,
-    ]);
+    let source_facet_ids: FxHashSet<DbID> = FxHashSet::from_iter(
+        [
+            ccre_overlap_facet.id,
+            ccre_category_facet.id,
+            grna_type_facet.id,
+        ]
+        .into_iter(),
+    );
 
-    let mut facet_ids: HashSet<DbID> = HashSet::new();
+    let mut facet_ids: FxHashSet<DbID> = FxHashSet::default();
 
     let re_start_time = Instant::now();
 
@@ -239,10 +244,10 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
             &[&options.experiment_accession_id, &chromo],
         )?,
     };
-    let mut reg_effect_num_facets: HashMap<DbID, HashMap<&str, f32>> = HashMap::new();
+    let mut reg_effect_num_facets: FxHashMap<DbID, FxHashMap<&str, f32>> = FxHashMap::default();
     for row in &reg_effects {
         let key = row.get::<usize, DbID>(0);
-        let value = row.get::<usize, Json<HashMap<&str, f32>>>(1).0;
+        let value = row.get::<usize, Json<FxHashMap<&str, f32>>>(1).0;
         reg_effect_num_facets.insert(key, value);
     }
 
@@ -252,7 +257,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         .collect::<Vec<DbID>>();
     let facet_values = client.query(&facet_values_statement, &[&reg_effect_id_list])?;
     // (re id: DbID, facet value id: DbID, value: &str, facet id: DbID)
-    let mut facet_values_dict: HashMap<DbID, Vec<(DbID, &str, DbID)>> = HashMap::new();
+    let mut facet_values_dict: FxHashMap<DbID, Vec<(DbID, &str, DbID)>> = FxHashMap::default();
     for row in &facet_values {
         let key = row.get::<usize, DbID>(0);
         let value = (
@@ -270,15 +275,15 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     }
 
     let sources = client.query(&re_sources_statement, &[&reg_effect_id_list])?;
-    let mut source_dict: HashMap<
+    let mut source_dict: FxHashMap<
         DbID,
-        Vec<(DbID, Option<Json<HashMap<&str, f32>>>, &str, Range<i32>)>,
-    > = HashMap::new();
+        Vec<(DbID, Option<Json<FxHashMap<&str, f32>>>, &str, Range<i32>)>,
+    > = FxHashMap::default();
     for row in &sources {
         let key = row.get::<usize, DbID>(0);
         let value = (
             row.get::<usize, DbID>(1),
-            row.get::<usize, Option<Json<HashMap<&str, f32>>>>(2),
+            row.get::<usize, Option<Json<FxHashMap<&str, f32>>>>(2),
             row.get::<usize, &str>(3),
             row.get::<usize, Range<i32>>(4),
         );
@@ -292,7 +297,8 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     }
 
     let targets = client.query(&re_targets_statement, &[&reg_effect_id_list])?;
-    let mut target_dict: HashMap<DbID, Vec<(DbID, &str, Range<i32>, &str)>> = HashMap::new();
+    let mut target_dict: FxHashMap<DbID, Vec<(DbID, &str, Range<i32>, &str)>> =
+        FxHashMap::default();
     for row in &targets {
         let key = row.get::<usize, DbID>(0);
         let value = (
@@ -315,7 +321,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         .map(|row| row.get::<&str, DbID>("id"))
         .collect::<Vec<DbID>>();
     let source_facets = client.query(&source_facet_statement, &[&source_id_list])?;
-    let mut source_facet_dict: HashMap<DbID, Vec<(DbID, &str, DbID)>> = HashMap::new();
+    let mut source_facet_dict: FxHashMap<DbID, Vec<(DbID, &str, DbID)>> = FxHashMap::default();
     for row in &source_facets {
         let key = row.get::<usize, DbID>(0);
         let value = (
@@ -372,11 +378,11 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 .iter()
                 .filter(|s| all_chromos || s.2 == options.chromo.as_ref().unwrap()),
         );
-        let mut source_counter: HashSet<Bucket> = HashSet::new();
-        let mut target_counter: HashSet<Bucket> = HashSet::new();
+        let mut source_counter: FxHashSet<Bucket> = FxHashSet::default();
+        let mut target_counter: FxHashSet<Bucket> = FxHashSet::default();
 
-        let mut source_disc_facets: HashSet<DbID> = HashSet::new();
-        let mut reg_disc_facets: HashSet<DbID> = HashSet::new();
+        let mut source_disc_facets: FxHashSet<DbID> = FxHashSet::default();
+        let mut reg_disc_facets: FxHashSet<DbID> = FxHashSet::default();
 
         for facets in facet_values_dict.get(&re_id) {
             facets
@@ -488,14 +494,17 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
     // These are all the facets that are potentially relevant for coverage filtering
     let experiment_facet_coverages = facet_set();
-    let experiment_facet_names: HashSet<&str> = HashSet::from([
-        FACET_DIRECTION,
-        FACET_EFFECT_SIZE,
-        FACET_CCRE_CATEGORY,
-        FACET_CCRE_OVERLAP,
-        FACET_SIGNIFICANCE,
-        FACET_GRNA_TYPE,
-    ]);
+    let experiment_facet_names: FxHashSet<&str> = FxHashSet::from_iter(
+        [
+            FACET_DIRECTION,
+            FACET_EFFECT_SIZE,
+            FACET_CCRE_CATEGORY,
+            FACET_CCRE_OVERLAP,
+            FACET_SIGNIFICANCE,
+            FACET_GRNA_TYPE,
+        ]
+        .into_iter(),
+    );
 
     // The idea is to filter out facets that are in the database, but aren't used to annotate
     // data for this particular experiment.
@@ -511,7 +520,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 .clone(),
         );
         if facet.facet_type == FACET_TYPE_DISCRETE {
-            let facet_values: HashMap<DbID, String> = all_facet_values
+            let facet_values: FxHashMap<DbID, String> = all_facet_values
                 .iter()
                 .filter(|f| facet_ids.contains(&f.id))
                 .map(|f| (f.id, f.value.to_string()))

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::data_structures::DbID;
 
@@ -27,9 +28,9 @@ pub struct Facet {
     pub name: String,
     pub facet_type: String,
     pub description: String,
-    pub coverage: Option<HashSet<FacetCoverage>>,
+    pub coverage: Option<FxHashSet<FacetCoverage>>,
     pub range: Option<FacetRange>,
-    pub values: Option<HashMap<DbID, String>>,
+    pub values: Option<FxHashMap<DbID, String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -39,31 +40,31 @@ pub struct FacetValue {
     pub facet_id: DbID,
 }
 
-pub fn facet_set() -> HashMap<&'static str, HashSet<FacetCoverage>> {
-    let mut experiment_facets: HashMap<&str, HashSet<FacetCoverage>> = HashMap::new();
+pub fn facet_set() -> FxHashMap<&'static str, FxHashSet<FacetCoverage>> {
+    let mut experiment_facets: FxHashMap<&str, FxHashSet<FacetCoverage>> = FxHashMap::default();
     experiment_facets.insert(
         FACET_DIRECTION,
-        HashSet::from([FacetCoverage::Target, FacetCoverage::Source]),
+        FxHashSet::from_iter([FacetCoverage::Target, FacetCoverage::Source].into_iter()),
     );
     experiment_facets.insert(
         FACET_EFFECT_SIZE,
-        HashSet::from([FacetCoverage::Target, FacetCoverage::Source]),
+        FxHashSet::from_iter([FacetCoverage::Target, FacetCoverage::Source].into_iter()),
     );
     experiment_facets.insert(
         FACET_CCRE_CATEGORY,
-        HashSet::from([FacetCoverage::Target, FacetCoverage::Source]),
+        FxHashSet::from_iter([FacetCoverage::Target, FacetCoverage::Source].into_iter()),
     );
     experiment_facets.insert(
         FACET_CCRE_OVERLAP,
-        HashSet::from([FacetCoverage::Target, FacetCoverage::Source]),
+        FxHashSet::from_iter([FacetCoverage::Target, FacetCoverage::Source].into_iter()),
     );
     experiment_facets.insert(
         FACET_SIGNIFICANCE,
-        HashSet::from([FacetCoverage::Target, FacetCoverage::Source]),
+        FxHashSet::from_iter([FacetCoverage::Target, FacetCoverage::Source].into_iter()),
     );
     experiment_facets.insert(
         FACET_GRNA_TYPE,
-        HashSet::from([FacetCoverage::Target, FacetCoverage::Source]),
+        FxHashSet::from_iter([FacetCoverage::Target, FacetCoverage::Source].into_iter()),
     );
 
     experiment_facets

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fmt;
 
 use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
@@ -11,14 +11,14 @@ use crate::data_structures::RegEffectData;
 #[derive(Debug)]
 pub struct Interval {
     pub start: u32,
-    pub values: HashMap<DbID, RegEffectData>,
+    pub values: FxHashMap<DbID, RegEffectData>,
 }
 
 const INTERVAL_FIELD_START: &str = "start";
 const INTERVAL_FIELD_VALUES: &str = "values";
 
 impl Interval {
-    fn new(start: u32, values: HashMap<DbID, RegEffectData>) -> Self {
+    fn new(start: u32, values: FxHashMap<DbID, RegEffectData>) -> Self {
         let i = Interval {
             start: start,
             values: values,
