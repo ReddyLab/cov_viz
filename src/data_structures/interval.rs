@@ -1,30 +1,26 @@
-use rustc_hash::FxHashMap;
 use std::fmt;
 
 use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 
-use crate::data_structures::DbID;
 use crate::data_structures::RegEffectData;
 
 #[derive(Debug)]
 pub struct Interval {
     pub start: u32,
-    pub values: FxHashMap<DbID, RegEffectData>,
+    pub values: Vec<RegEffectData>,
 }
 
 const INTERVAL_FIELD_START: &str = "start";
 const INTERVAL_FIELD_VALUES: &str = "values";
 
 impl Interval {
-    fn new(start: u32, values: FxHashMap<DbID, RegEffectData>) -> Self {
-        let i = Interval {
+    fn new(start: u32, values: Vec<RegEffectData>) -> Self {
+        Interval {
             start: start,
             values: values,
-        };
-
-        i
+        }
     }
 }
 

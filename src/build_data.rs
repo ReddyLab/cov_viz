@@ -474,7 +474,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
             }
             let source = Interval {
                 start: options.bucket_size * (j as u32) + 1,
-                values: source_bucket.clone(),
+                values: source_bucket.clone().into_values().collect(),
             };
             chrom_data.source_intervals.push(source);
         }
@@ -486,7 +486,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
             }
             let target = Interval {
                 start: options.bucket_size * (j as u32) + 1,
-                values: target_bucket.clone(),
+                values: target_bucket.clone().into_values().collect(),
             };
             chrom_data.target_intervals.push(target);
         }
