@@ -555,5 +555,6 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     Ok(CoverageData {
         chromosomes: chrom_data,
         facets: facets.into_iter().map(|f| f.clone()).collect(),
+        chrom_lengths: assembly_info.iter().map(|c| c.1 as usize).collect(),
     })
 }
