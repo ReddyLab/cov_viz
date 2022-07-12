@@ -426,7 +426,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                     .unwrap();
                 let target_info = targets.entry(target.0).or_insert(RegEffectData::new());
                 target_info.add_facets(RegEffectFacets(
-                    disc_facets.clone(),
+                    disc_facets.clone().into_iter().collect(),
                     effect_size,
                     significance,
                 ));
@@ -447,7 +447,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                     .unwrap();
                 let source_info = sources.entry(source.0).or_insert(RegEffectData::new());
                 source_info.add_facets(RegEffectFacets(
-                    disc_facets.clone(),
+                    disc_facets.clone().into_iter().collect(),
                     effect_size,
                     significance,
                 ));

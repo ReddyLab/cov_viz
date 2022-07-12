@@ -7,7 +7,7 @@ use rustc_hash::FxHashSet;
 pub struct Bucket(pub usize, pub u32);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RegEffectFacets(pub FxHashSet<DbID>, pub f32, pub f32);
+pub struct RegEffectFacets(pub Vec<DbID>, pub f32, pub f32);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RegEffectData {
