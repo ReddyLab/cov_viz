@@ -522,7 +522,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         if facet.facet_type == FACET_TYPE_DISCRETE {
             let facet_values: FxHashMap<DbID, String> = all_facet_values
                 .iter()
-                .filter(|f| facet_ids.contains(&f.id))
+                .filter(|f| facet_ids.contains(&f.id) && f.facet_id == facet.id)
                 .map(|f| (f.id, f.value.to_string()))
                 .collect();
             if facet_values.len() == 0 {
