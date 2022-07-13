@@ -72,8 +72,19 @@ name = "cov_viz"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "cov_viz_ds",
  "postgres",
  "postgres_range",
+ "rustc-hash",
+ "serde",
+]
+
+[[package]]
+name = "cov_viz_ds"
+version = "0.1.0"
+source = "git+https://github.com/ReddyLab/cov_viz_ds?rev=7a5d7defece979fb9606bd334c0622dfb98df276#7a5d7defece979fb9606bd334c0622dfb98df276"
+dependencies = [
+ "bincode",
  "rustc-hash",
  "serde",
 ]

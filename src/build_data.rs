@@ -7,11 +7,11 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::options::Options;
 
-use crate::data_structures::facets::{
+use cov_viz_ds::facets::{
     facet_set, FACET_CCRE_CATEGORY, FACET_CCRE_OVERLAP, FACET_DIRECTION, FACET_EFFECT_SIZE,
     FACET_GRNA_TYPE, FACET_SIGNIFICANCE, FACET_TYPE_DISCRETE,
 };
-use crate::data_structures::*;
+use cov_viz_ds::*;
 
 const GRCH38: [(&str, i32); 25] = [
     ("1", 248956422),

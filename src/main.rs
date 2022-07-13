@@ -1,5 +1,4 @@
 mod build_data;
-mod data_structures;
 mod options;
 
 use postgres::{Client, NoTls};
