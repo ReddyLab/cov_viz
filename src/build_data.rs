@@ -161,36 +161,36 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
     // (re id: DbID, facet value id: DbID, value: &str, facet id: DbID)
     let facet_values_statement = client.prepare(r#"
-        SELECT (search_regulatoryeffect_facet_values.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_facetvalue.id, search_facetvalue.value, search_facetvalue.facet_id
+        SELECT (search_regulatoryeffectobservation_facet_values.regulatoryeffectobservation_id) AS _prefetch_related_val_regulatoryeffectobservation_id, search_facetvalue.id, search_facetvalue.value, search_facetvalue.facet_id
         FROM search_facetvalue
-        INNER JOIN search_regulatoryeffect_facet_values ON (search_facetvalue.id = search_regulatoryeffect_facet_values.facetvalue_id)
-        WHERE search_regulatoryeffect_facet_values.regulatoryeffect_id = ANY($1)"#
+        INNER JOIN search_regulatoryeffectobservation_facet_values ON (search_facetvalue.id = search_regulatoryeffectobservation_facet_values.facetvalue_id)
+        WHERE search_regulatoryeffectobservation_facet_values.regulatoryeffectobservation_id = ANY($1)"#
     )?;
-    // (re id: DbID, dnaregion id: DbID, numeric facets: Json, chrom name: &str, location: Range(i32))
+    // (re id: DbID, dnafeature id: DbID, numeric facets: Json, chrom name: &str, location: Range(i32))
     let re_sources_statement = client.prepare(r#"
-        SELECT (search_regulatoryeffect_sources.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_dnaregion.id, search_dnaregion.facet_num_values, search_dnaregion.chrom_name, search_dnaregion.location
-        FROM search_dnaregion
-        INNER JOIN search_regulatoryeffect_sources ON (search_dnaregion.id = search_regulatoryeffect_sources.dnaregion_id)
-        WHERE search_regulatoryeffect_sources.regulatoryeffect_id = ANY($1)"#
+        SELECT (search_regulatoryeffectobservation_sources.regulatoryeffectobservation_id) AS _prefetch_related_val_regulatoryeffectobservation_id, search_dnafeature.id, search_dnafeature.facet_num_values, search_dnafeature.chrom_name, search_dnafeature.location
+        FROM search_dnafeature
+        INNER JOIN search_regulatoryeffectobservation_sources ON (search_dnafeature.id = search_regulatoryeffectobservation_sources.dnafeature_id)
+        WHERE search_regulatoryeffectobservation_sources.regulatoryeffectobservation_id = ANY($1)"#
     )?;
     // (re id: DbID, feature assembly id: DbID, chrom name: &str, location: Range(i32), strand: &str)
     let re_targets_statement = client.prepare(r#"
-        SELECT (search_regulatoryeffect_target_assemblies.regulatoryeffect_id) AS _prefetch_related_val_regulatoryeffect_id, search_featureassembly.id, search_featureassembly.chrom_name, search_featureassembly.location, search_featureassembly.strand
-        FROM search_featureassembly
-        INNER JOIN search_regulatoryeffect_target_assemblies ON (search_featureassembly.id = search_regulatoryeffect_target_assemblies.featureassembly_id)
-        WHERE search_regulatoryeffect_target_assemblies.regulatoryeffect_id = ANY($1)"#
+        SELECT (search_regulatoryeffectobservation_targets.regulatoryeffectobservation_id) AS _prefetch_related_val_regulatoryeffectobservation_id, search_dnafeature.id, search_dnafeature.chrom_name, search_dnafeature.location, search_dnafeature.strand
+        FROM search_dnafeature
+        INNER JOIN search_regulatoryeffectobservation_targets ON (search_dnafeature.id = search_regulatoryeffectobservation_targets.dnafeature_id)
+        WHERE search_regulatoryeffectobservation_targets.regulatoryeffectobservation_id = ANY($1)"#
     )?;
     // (source id: DbID, facet value id: DbID, value: &str, facet id: DbID)
     let source_facet_statement = client.prepare(r#"
-        SELECT (search_dnaregion_facet_values.dnaregion_id) AS _prefetch_related_val_dnaregion_id, search_facetvalue.id, search_facetvalue.value, search_facetvalue.facet_id
+        SELECT (search_dnafeature_facet_values.dnafeature_id) AS _prefetch_related_val_dnafeature_id, search_facetvalue.id, search_facetvalue.value, search_facetvalue.facet_id
         FROM search_facetvalue
-        INNER JOIN search_dnaregion_facet_values ON (search_facetvalue.id = search_dnaregion_facet_values.facetvalue_id)
-        WHERE search_dnaregion_facet_values.dnaregion_id = ANY($1)"#
+        INNER JOIN search_dnafeature_facet_values ON (search_facetvalue.id = search_dnafeature_facet_values.facetvalue_id)
+        WHERE search_dnafeature_facet_values.dnafeature_id = ANY($1)"#
     )?;
     let facet_range_statement = client.prepare(r#"
-        SELECT MIN(((search_regulatoryeffect.facet_num_values -> $1))::double precision) AS min, MAX(((search_regulatoryeffect.facet_num_values -> $1))::double precision) AS max
-        FROM search_regulatoryeffect
-        INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)
+        SELECT MIN(((search_regulatoryeffectobservation.facet_num_values -> $1))::double precision) AS min, MAX(((search_regulatoryeffectobservation.facet_num_values -> $1))::double precision) AS max
+        FROM search_regulatoryeffectobservation
+        INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)
         WHERE search_experiment.accession_id = $2"#
     )?;
     let dir_facet = all_facets
@@ -224,17 +224,17 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
     // (id: DbID, numeric facets: Json)
     let reg_effects_statement = client.prepare(r#"
-        SELECT search_regulatoryeffect.id, search_regulatoryeffect.facet_num_values
-        FROM search_regulatoryeffect
-        INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)
+        SELECT search_regulatoryeffectobservation.id, search_regulatoryeffectobservation.facet_num_values
+        FROM search_regulatoryeffectobservation
+        INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)
         WHERE search_experiment.accession_id = $1"#
     )?;
     let reg_effects_chromo_statement = client.prepare(r#"
-        SELECT search_regulatoryeffect.id, search_regulatoryeffect.facet_num_values
-        FROM search_regulatoryeffect
-        INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)
-        INNER JOIN search_regulatoryeffect_target_assemblies as re_ta ON (search_regulatoryeffect.id = re_ta.regulatoryeffect_id)
-        INNER JOIN search_featureassembly as fa ON (fa.id = re_ta.featureassembly_id)
+        SELECT search_regulatoryeffectobservation.id, search_regulatoryeffectobservation.facet_num_values
+        FROM search_regulatoryeffectobservation
+        INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)
+        INNER JOIN search_regulatoryeffectobservation_targets as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
+        INNER JOIN search_dnafeature as fa ON (fa.id = re_ta.dnafeature_id)
         WHERE search_experiment.accession_id = $1 and fa.chrom_name = $2"#
     )?;
     let reg_effects = match &options.chromo {
@@ -341,16 +341,16 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     let re_count: i64 = match &options.chromo {
         None => client.query_one(r#"
             SELECT COUNT(*) AS count
-            FROM search_regulatoryeffect
-            INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)
+            FROM search_regulatoryeffectobservation
+            INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)
             WHERE search_experiment.accession_id = $1"#,
         &[&options.experiment_accession_id]
         )?,
         Some(chromo) => client.query_one(r#"
             SELECT COUNT(*) AS count
-            FROM search_regulatoryeffect
-            INNER JOIN search_experiment ON (search_regulatoryeffect.experiment_id = search_experiment.id)INNER JOIN search_regulatoryeffect_target_assemblies as re_ta ON (search_regulatoryeffect.id = re_ta.regulatoryeffect_id)
-            INNER JOIN search_featureassembly as fa ON (fa.id = re_ta.featureassembly_id)
+            FROM search_regulatoryeffectobservation
+            INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)INNER JOIN search_regulatoryeffectobservation_targets as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
+            INNER JOIN search_dnafeature as fa ON (fa.id = re_ta.dnafeature_id)
             WHERE search_experiment.accession_id = $1 and fa.chrom_name = $2"#,
         &[&options.experiment_accession_id, &chromo]
         )?,
