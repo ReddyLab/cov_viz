@@ -190,8 +190,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     let facet_range_statement = client.prepare(r#"
         SELECT MIN(((search_regulatoryeffectobservation.facet_num_values -> $1))::double precision) AS min, MAX(((search_regulatoryeffectobservation.facet_num_values -> $1))::double precision) AS max
         FROM search_regulatoryeffectobservation
-        INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)
-        WHERE search_experiment.accession_id = $2"#
+        WHERE search_regulatoryeffectobservation.experiment_accession_id = $2"#
     )?;
     let dir_facet = all_facets
         .iter()
@@ -226,16 +225,14 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     let reg_effects_statement = client.prepare(r#"
         SELECT search_regulatoryeffectobservation.id, search_regulatoryeffectobservation.facet_num_values
         FROM search_regulatoryeffectobservation
-        INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)
-        WHERE search_experiment.accession_id = $1"#
+        WHERE search_regulatoryeffectobservation.experiment_accession_id = $1"#
     )?;
     let reg_effects_chromo_statement = client.prepare(r#"
         SELECT search_regulatoryeffectobservation.id, search_regulatoryeffectobservation.facet_num_values
         FROM search_regulatoryeffectobservation
-        INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)
         INNER JOIN search_regulatoryeffectobservation_targets as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
         INNER JOIN search_dnafeature as fa ON (fa.id = re_ta.dnafeature_id)
-        WHERE search_experiment.accession_id = $1 and fa.chrom_name = $2"#
+        WHERE search_regulatoryeffectobservation.experiment_accession_id = $1 and fa.chrom_name = $2"#
     )?;
     let reg_effects = match &options.chromo {
         None => client.query(&reg_effects_statement, &[&options.experiment_accession_id])?,
@@ -342,16 +339,15 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         None => client.query_one(r#"
             SELECT COUNT(*) AS count
             FROM search_regulatoryeffectobservation
-            INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)
-            WHERE search_experiment.accession_id = $1"#,
+            WHERE search_regulatoryeffectobservation.experiment_accession_id = $1"#,
         &[&options.experiment_accession_id]
         )?,
         Some(chromo) => client.query_one(r#"
             SELECT COUNT(*) AS count
             FROM search_regulatoryeffectobservation
-            INNER JOIN search_experiment ON (search_regulatoryeffectobservation.experiment_id = search_experiment.id)INNER JOIN search_regulatoryeffectobservation_targets as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
+            INNER JOIN search_regulatoryeffectobservation_targets as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
             INNER JOIN search_dnafeature as fa ON (fa.id = re_ta.dnafeature_id)
-            WHERE search_experiment.accession_id = $1 and fa.chrom_name = $2"#,
+            WHERE search_regulatoryeffectobservation.experiment_accession_id = $1 and fa.chrom_name = $2"#,
         &[&options.experiment_accession_id, &chromo]
         )?,
     }.get("count");
