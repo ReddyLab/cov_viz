@@ -230,7 +230,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     let reg_effects_chromo_statement = client.prepare(r#"
         SELECT search_regulatoryeffectobservation.id, search_regulatoryeffectobservation.facet_num_values
         FROM search_regulatoryeffectobservation
-        INNER JOIN search_regulatoryeffectobservation_targets as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
+        INNER JOIN search_regulatoryeffectobservation_sources as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
         INNER JOIN search_dnafeature as fa ON (fa.id = re_ta.dnafeature_id)
         WHERE search_regulatoryeffectobservation.experiment_accession_id = $1 and fa.chrom_name = $2"#
     )?;
@@ -345,7 +345,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         Some(chromo) => client.query_one(r#"
             SELECT COUNT(*) AS count
             FROM search_regulatoryeffectobservation
-            INNER JOIN search_regulatoryeffectobservation_targets as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
+            INNER JOIN search_regulatoryeffectobservation_sources as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
             INNER JOIN search_dnafeature as fa ON (fa.id = re_ta.dnafeature_id)
             WHERE search_regulatoryeffectobservation.experiment_accession_id = $1 and fa.chrom_name = $2"#,
         &[&options.experiment_accession_id, &chromo]
