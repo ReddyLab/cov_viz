@@ -1,7 +1,7 @@
 [package]
 name = "cov_viz"
 description = "Generate data used by the CCGR Portal experiment coverage visualizer"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 publish = false
 

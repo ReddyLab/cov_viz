@@ -405,28 +405,34 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
         let disc_facets = &reg_disc_facets | &source_disc_facets;
 
-        for target in target_dict.get(&re_id).unwrap() {
-            let chrom_name = target.1.strip_prefix("chr").unwrap();
-            let target_start = match target.3 {
-                "-" => target.2.upper().unwrap().value,
-                _ => target.2.lower().unwrap().value,
-            };
-            let target_bucket = bucket(target_start as u32);
-            target_counter.insert(Bucket(*chrom_keys.get(chrom_name).unwrap(), target_bucket));
+        if let Some(targets) = target_dict.get(&re_id) {
+            for target in targets {
+                let chrom_name = target.1.strip_prefix("chr").unwrap();
+                let x = chrom_keys.get(chrom_name);
+                if let None = x {
+                    continue;
+                }
+                let target_start = match target.3 {
+                    "-" => target.2.upper().unwrap().value,
+                    _ => target.2.lower().unwrap().value,
+                };
+                let target_bucket = bucket(target_start as u32);
+                target_counter.insert(Bucket(*chrom_keys.get(chrom_name).unwrap(), target_bucket));
 
-            {
-                let targets = target_buckets
-                    .get_mut(chrom_name)
-                    .unwrap()
-                    .get_mut(target_bucket as usize)
-                    .unwrap();
-                let target_info = targets.entry(target.0).or_insert(RegEffectData::new());
-                target_info.add_facets(RegEffectFacets(
-                    disc_facets.clone().into_iter().collect(),
-                    effect_size,
-                    significance,
-                ));
-                target_info.update_buckets(&source_counter);
+                {
+                    let targets = target_buckets
+                        .get_mut(chrom_name)
+                        .unwrap()
+                        .get_mut(target_bucket as usize)
+                        .unwrap();
+                    let target_info = targets.entry(target.0).or_insert(RegEffectData::new());
+                    target_info.add_facets(RegEffectFacets(
+                        disc_facets.clone().into_iter().collect(),
+                        effect_size,
+                        significance,
+                    ));
+                    target_info.update_buckets(&source_counter);
+                }
             }
         }
 
