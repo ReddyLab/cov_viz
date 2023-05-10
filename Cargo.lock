@@ -69,7 +69,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cov_viz"
-version = "0.1.4"
+version = "0.2.0"
 dependencies = [
  "bincode",
  "cov_viz_ds",
@@ -81,8 +81,8 @@ dependencies = [
 
 [[package]]
 name = "cov_viz_ds"
-version = "0.1.1"
-source = "git+https://github.com/ReddyLab/cov_viz_ds?rev=e3a4b84903d23bdbc7e4f88fd24c6e5f6a91aa11#e3a4b84903d23bdbc7e4f88fd24c6e5f6a91aa11"
+version = "0.2.0"
+source = "git+https://github.com/ReddyLab/cov_viz_ds?rev=6a93d8fae232fd16a6de025841d30aae6f3493e3#6a93d8fae232fd16a6de025841d30aae6f3493e3"
 dependencies = [
  "bincode",
  "rustc-hash",

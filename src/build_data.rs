@@ -105,7 +105,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         chrom_keys.insert(assembly_info[i].0, assembly_info[i].2);
     }
 
-    let mut source_buckets: FxHashMap<&str, Vec<FxHashMap<DbID, RegEffectData>>> =
+    let mut source_buckets: FxHashMap<&str, Vec<FxHashMap<DbID, FeatureData>>> =
         FxHashMap::default();
     for chrom in &assembly_info {
         source_buckets.insert(
@@ -115,7 +115,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 .collect(),
         );
     }
-    let mut target_buckets: FxHashMap<&str, Vec<FxHashMap<DbID, RegEffectData>>> =
+    let mut target_buckets: FxHashMap<&str, Vec<FxHashMap<DbID, FeatureData>>> =
         FxHashMap::default();
     for chrom in &assembly_info {
         target_buckets.insert(
@@ -335,34 +335,17 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         }
     }
 
-    let re_count: i64 = match &options.chromo {
-        None => client.query_one(r#"
-            SELECT COUNT(*) AS count
-            FROM search_regulatoryeffectobservation
-            WHERE search_regulatoryeffectobservation.experiment_accession_id = $1"#,
-        &[&options.experiment_accession_id]
-        )?,
-        Some(chromo) => client.query_one(r#"
-            SELECT COUNT(*) AS count
-            FROM search_regulatoryeffectobservation
-            INNER JOIN search_regulatoryeffectobservation_sources as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
-            INNER JOIN search_dnafeature as fa ON (fa.id = re_ta.dnafeature_id)
-            WHERE search_regulatoryeffectobservation.experiment_accession_id = $1 and fa.chrom_name = $2"#,
-        &[&options.experiment_accession_id, &chromo]
-        )?,
-    }.get("count");
-
-    println!("Regulatory Effect count: {}", re_count);
+    println!("Regulatory Effect count: {}", reg_effect_id_list.len());
 
     // For each regulatory effect we want to add all the facets associated with the effect itself,
     // its sources and its targets to the bucket associated with the each source and target.
     // For each source we want to keep track of all the target buckets it's associated with, and for each
     // source we want to keep track of all the source buckets it's associated with.
-    for re_id in reg_effect_id_list {
+    for reo_id in reg_effect_id_list {
         // If we are targeting a specific chromosome filter out sources not in that chromosome.
         // They won't be visible in the visualization and the bucket index will be wrong.
-        let re_source = source_dict.get(&re_id).unwrap();
-        let re_facets = reg_effect_num_facets.get(&re_id).unwrap();
+        let re_source = source_dict.get(&reo_id).unwrap();
+        let re_facets = reg_effect_num_facets.get(&reo_id).unwrap();
         let effect_size = *re_facets.get(FACET_EFFECT_SIZE).unwrap();
         let significance = *re_facets.get(FACET_SIGNIFICANCE).unwrap();
         let all_chromos = match options.chromo {
@@ -374,13 +357,13 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 .iter()
                 .filter(|s| all_chromos || s.2 == options.chromo.as_ref().unwrap()),
         );
-        let mut source_counter: FxHashSet<Bucket> = FxHashSet::default();
-        let mut target_counter: FxHashSet<Bucket> = FxHashSet::default();
+        let mut source_counter: FxHashSet<BucketLoc> = FxHashSet::default();
+        let mut target_counter: FxHashSet<BucketLoc> = FxHashSet::default();
 
         let mut source_disc_facets: FxHashSet<DbID> = FxHashSet::default();
         let mut reg_disc_facets: FxHashSet<DbID> = FxHashSet::default();
 
-        for facets in facet_values_dict.get(&re_id) {
+        if let Some(facets) = facet_values_dict.get(&reo_id) {
             facets
                 .iter()
                 .filter(|f| f.2 == dir_facet.id)
@@ -388,12 +371,12 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         }
 
         for source in &re_source_ref {
-            source_counter.insert(Bucket(
-                *chrom_keys
+            source_counter.insert(BucketLoc {
+                chrom: *chrom_keys
                     .get(source.2.strip_prefix("chr").unwrap())
                     .unwrap(),
-                bucket(source.3.lower().unwrap().value as u32),
-            ));
+                idx: bucket(source.3.lower().unwrap().value as u32),
+            });
 
             for source_facets in &source_facet_dict.get(&source.0) {
                 source_facets
@@ -405,7 +388,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
         let disc_facets = &reg_disc_facets | &source_disc_facets;
 
-        if let Some(targets) = target_dict.get(&re_id) {
+        if let Some(targets) = target_dict.get(&reo_id) {
             for target in targets {
                 let chrom_name = target.1.strip_prefix("chr").unwrap();
                 let x = chrom_keys.get(chrom_name);
@@ -417,7 +400,10 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                     _ => target.2.lower().unwrap().value,
                 };
                 let target_bucket = bucket(target_start as u32);
-                target_counter.insert(Bucket(*chrom_keys.get(chrom_name).unwrap(), target_bucket));
+                target_counter.insert(BucketLoc {
+                    chrom: *chrom_keys.get(chrom_name).unwrap(),
+                    idx: target_bucket,
+                });
 
                 {
                     let targets = target_buckets
@@ -425,12 +411,15 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                         .unwrap()
                         .get_mut(target_bucket as usize)
                         .unwrap();
-                    let target_info = targets.entry(target.0).or_insert(RegEffectData::new());
-                    target_info.add_facets(RegEffectFacets(
-                        disc_facets.clone().into_iter().collect(),
+                    let target_info = targets
+                        .entry(target.0)
+                        .or_insert(FeatureData::new(target.0));
+                    target_info.add_facets(ObservationData {
+                        reo_id,
+                        facet_ids: disc_facets.clone().into_iter().collect(),
                         effect_size,
                         significance,
-                    ));
+                    });
                     target_info.update_buckets(&source_counter);
                 }
             }
@@ -447,12 +436,15 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                     .unwrap()
                     .get_mut(source_bucket as usize)
                     .unwrap();
-                let source_info = sources.entry(source.0).or_insert(RegEffectData::new());
-                source_info.add_facets(RegEffectFacets(
-                    disc_facets.clone().into_iter().collect(),
+                let source_info = sources
+                    .entry(source.0)
+                    .or_insert(FeatureData::new(source.0));
+                source_info.add_facets(ObservationData {
+                    reo_id,
+                    facet_ids: disc_facets.clone().into_iter().collect(),
                     effect_size,
                     significance,
-                ));
+                });
                 source_info.update_buckets(&target_counter);
             }
         }
