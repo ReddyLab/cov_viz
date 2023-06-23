@@ -9,7 +9,7 @@ use crate::options::Options;
 
 use cov_viz_ds::facets::{
     facet_set, FACET_CCRE_CATEGORY, FACET_CCRE_OVERLAP, FACET_DIRECTION, FACET_EFFECT_SIZE,
-    FACET_GRNA_TYPE, FACET_SIGNIFICANCE, FACET_TYPE_DISCRETE,
+    FACET_GRNA_TYPE, FACET_SIGNIFICANCE, FACET_TYPE_CATEGORICAL,
 };
 use cov_viz_ds::*;
 
@@ -513,7 +513,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 .unwrap()
                 .clone(),
         );
-        if facet.facet_type == FACET_TYPE_DISCRETE {
+        if facet.facet_type == FACET_TYPE_CATEGORICAL {
             let facet_values: FxHashMap<DbID, String> = all_facet_values
                 .iter()
                 .filter(|f| facet_ids.contains(&f.id) && f.facet_id == facet.id)
