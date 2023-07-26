@@ -190,7 +190,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     let facet_range_statement = client.prepare(r#"
         SELECT MIN(((search_regulatoryeffectobservation.facet_num_values -> $1))::double precision) AS min, MAX(((search_regulatoryeffectobservation.facet_num_values -> $1))::double precision) AS max
         FROM search_regulatoryeffectobservation
-        WHERE search_regulatoryeffectobservation.experiment_accession_id = $2"#
+        WHERE search_regulatoryeffectobservation.analysis_accession_id = $2"#
     )?;
     let dir_facet = all_facets
         .iter()
@@ -225,20 +225,20 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     let reg_effects_statement = client.prepare(r#"
         SELECT search_regulatoryeffectobservation.id, search_regulatoryeffectobservation.facet_num_values
         FROM search_regulatoryeffectobservation
-        WHERE search_regulatoryeffectobservation.experiment_accession_id = $1"#
+        WHERE search_regulatoryeffectobservation.analysis_accession_id = $1"#
     )?;
     let reg_effects_chromo_statement = client.prepare(r#"
         SELECT search_regulatoryeffectobservation.id, search_regulatoryeffectobservation.facet_num_values
         FROM search_regulatoryeffectobservation
         INNER JOIN search_regulatoryeffectobservation_sources as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
         INNER JOIN search_dnafeature as fa ON (fa.id = re_ta.dnafeature_id)
-        WHERE search_regulatoryeffectobservation.experiment_accession_id = $1 and fa.chrom_name = $2"#
+        WHERE search_regulatoryeffectobservation.analysis_accession_id = $1 and fa.chrom_name = $2"#
     )?;
     let reg_effects = match &options.chromo {
-        None => client.query(&reg_effects_statement, &[&options.experiment_accession_id])?,
+        None => client.query(&reg_effects_statement, &[&options.analysis_accession_id])?,
         Some(chromo) => client.query(
             &reg_effects_chromo_statement,
-            &[&options.experiment_accession_id, &chromo],
+            &[&options.analysis_accession_id, &chromo],
         )?,
     };
     let mut reg_effect_num_facets: FxHashMap<DbID, FxHashMap<&str, f32>> = FxHashMap::default();
@@ -526,7 +526,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         } else if facet.name == FACET_EFFECT_SIZE {
             let facet_range_row = client.query_one(
                 &facet_range_statement,
-                &[&FACET_EFFECT_SIZE, &options.experiment_accession_id],
+                &[&FACET_EFFECT_SIZE, &options.analysis_accession_id],
             )?;
             facet.range = Some(FacetRange(
                 facet_range_row.get::<&str, f64>("min") as f32,
@@ -535,7 +535,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         } else if facet.name == FACET_SIGNIFICANCE {
             let facet_range_row = client.query_one(
                 &facet_range_statement,
-                &[&FACET_SIGNIFICANCE, &options.experiment_accession_id],
+                &[&FACET_SIGNIFICANCE, &options.analysis_accession_id],
             )?;
             facet.range = Some(FacetRange(
                 facet_range_row.get::<&str, f64>("min") as f32,

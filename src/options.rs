@@ -7,7 +7,7 @@ const DATABASE_URL_KEY: &str = "DATABASE_URL";
 #[derive(Debug)]
 pub struct Options {
     pub output_location: PathBuf,
-    pub experiment_accession_id: String,
+    pub analysis_accession_id: String,
     pub assembly_name: String,
     pub connection_string: String,
     pub bucket_size: u32,
@@ -33,7 +33,7 @@ impl Options {
 
         Options {
             output_location: path,
-            experiment_accession_id: args[2].clone(),
+            analysis_accession_id: args[2].clone(),
             assembly_name: args[3].clone(),
             bucket_size: match args.get(4) {
                 Some(size) => u32::from_str_radix(size, 10).unwrap(),
