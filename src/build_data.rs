@@ -144,6 +144,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
             facet_type: r.get::<&str, &str>("facet_type").to_string(),
             coverage: None,
             range: None,
+            range64: None,
             values: None,
         })
         .collect();
@@ -347,7 +348,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         let re_source = source_dict.get(&reo_id).unwrap();
         let re_facets = reg_effect_num_facets.get(&reo_id).unwrap();
         let effect_size = *re_facets.get(FACET_EFFECT_SIZE).unwrap();
-        let significance = *re_facets.get(FACET_SIGNIFICANCE).unwrap();
+        let significance: f64 = (*re_facets.get(FACET_SIGNIFICANCE).unwrap()).into();
         let all_chromos = match options.chromo {
             Some(_) => false,
             None => true,
@@ -537,9 +538,9 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 &facet_range_statement,
                 &[&FACET_SIGNIFICANCE, &options.analysis_accession_id],
             )?;
-            facet.range = Some(FacetRange(
-                facet_range_row.get::<&str, f64>("min") as f32,
-                facet_range_row.get::<&str, f64>("max") as f32,
+            facet.range64 = Some(FacetRange64(
+                facet_range_row.get::<&str, f64>("min"),
+                facet_range_row.get::<&str, f64>("max"),
             ));
         }
 
