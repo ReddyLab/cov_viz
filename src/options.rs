@@ -26,8 +26,8 @@ impl Options {
         };
 
         let output_file = match &chromo {
-            Some(chrom_name) => format!("level2_{}.bin", chrom_name.strip_prefix("chr").unwrap()),
-            None => "level1.bin".to_string(),
+            Some(chrom_name) => format!("level2_{}.ecd", chrom_name.strip_prefix("chr").unwrap()),
+            None => "level1.ecd".to_string(),
         };
         let path: PathBuf = [output_location, &output_file].iter().collect();
 
