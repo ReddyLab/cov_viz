@@ -13,6 +13,8 @@ use cov_viz_ds::facets::{
 };
 use cov_viz_ds::*;
 
+pub const MIN_SIG: f64 = 1e-100;
+
 const GRCH38: [(&str, i32, u8); 25] = [
     ("1", 248956422, 0),
     ("2", 242193529, 1),
@@ -100,35 +102,18 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
     let assembly_info = select_assembly(&options.assembly_name, &options.chromo);
 
+    let mut significant_observations: Vec<ObservationData> = Vec::new();
+    let mut nonsignificant_observations: Vec<ObservationData> = Vec::new();
+    let mut features = FxHashMap::<DbID, BucketLoc>::default();
+
     let mut chrom_keys: FxHashMap<&str, u8> = FxHashMap::default();
     for i in 0..assembly_info.len() {
         chrom_keys.insert(assembly_info[i].0, assembly_info[i].2);
     }
 
-    let mut source_buckets: FxHashMap<&str, Vec<FxHashMap<DbID, FeatureData>>> =
-        FxHashMap::default();
-    for chrom in &assembly_info {
-        source_buckets.insert(
-            chrom.0,
-            (0..(bucket(chrom.1 as u32) + 1))
-                .map(|_| FxHashMap::default())
-                .collect(),
-        );
-    }
-    let mut target_buckets: FxHashMap<&str, Vec<FxHashMap<DbID, FeatureData>>> =
-        FxHashMap::default();
-    for chrom in &assembly_info {
-        target_buckets.insert(
-            chrom.0,
-            (0..(bucket(chrom.1 as u32) + 1))
-                .map(|_| FxHashMap::default())
-                .collect(),
-        );
-    }
-
     let mut chrom_data: Vec<ChromosomeData> = Vec::new();
     for chrom in &assembly_info {
-        chrom_data.push(ChromosomeData::from(chrom.0, chrom.2, options.bucket_size))
+        chrom_data.push(ChromosomeData::from(chrom.0, chrom.2))
     }
 
     let all_facet_rows = client.query(
@@ -138,7 +123,7 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     let mut all_facets: Vec<Facet> = all_facet_rows
         .iter()
         .map(|r| Facet {
-            id: r.get::<&str, DbID>("id"),
+            id: r.get::<&str, i64>("id") as DbID,
             name: r.get::<&str, &str>("name").to_string(),
             description: r.get::<&str, &str>("description").to_string(),
             facet_type: r.get::<&str, &str>("facet_type").to_string(),
@@ -154,9 +139,9 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     let all_facet_values: Vec<FacetValue> = all_facet_value_rows
         .iter()
         .map(|r| FacetValue {
-            id: r.get::<&str, DbID>("id"),
+            id: r.get::<&str, i64>("id") as DbID,
             value: r.get::<&str, &str>("value").to_string(),
-            facet_id: r.get::<&str, DbID>("facet_id"),
+            facet_id: r.get::<&str, i64>("facet_id") as DbID,
         })
         .collect();
 
@@ -244,24 +229,24 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     };
     let mut reg_effect_num_facets: FxHashMap<DbID, FxHashMap<&str, f32>> = FxHashMap::default();
     for row in &reg_effects {
-        let key = row.get::<usize, DbID>(0);
+        let key = row.get::<usize, i64>(0) as DbID;
         let value = row.get::<usize, Json<FxHashMap<&str, f32>>>(1).0;
         reg_effect_num_facets.insert(key, value);
     }
 
     let reg_effect_id_list = reg_effects
         .iter()
-        .map(|row| row.get::<&str, DbID>("id"))
-        .collect::<Vec<DbID>>();
+        .map(|row| row.get::<&str, i64>("id"))
+        .collect::<Vec<i64>>();
     let facet_values = client.query(&facet_values_statement, &[&reg_effect_id_list])?;
     // (re id: DbID, facet value id: DbID, value: &str, facet id: DbID)
     let mut facet_values_dict: FxHashMap<DbID, Vec<(DbID, &str, DbID)>> = FxHashMap::default();
     for row in &facet_values {
-        let key = row.get::<usize, DbID>(0);
+        let key = row.get::<usize, i64>(0) as DbID;
         let value = (
-            row.get::<usize, DbID>(1),
+            row.get::<usize, i64>(1) as DbID,
             row.get::<usize, &str>(2),
-            row.get::<usize, DbID>(3),
+            row.get::<usize, i64>(3) as DbID,
         );
         if facet_values_dict.contains_key(&key) {
             if let Some(v) = facet_values_dict.get_mut(&key) {
@@ -278,9 +263,9 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         Vec<(DbID, Option<Json<FxHashMap<&str, f32>>>, &str, Range<i32>)>,
     > = FxHashMap::default();
     for row in &sources {
-        let key = row.get::<usize, DbID>(0);
+        let key = row.get::<usize, i64>(0) as DbID;
         let value = (
-            row.get::<usize, DbID>(1),
+            row.get::<usize, i64>(1) as DbID,
             row.get::<usize, Option<Json<FxHashMap<&str, f32>>>>(2),
             row.get::<usize, &str>(3),
             row.get::<usize, Range<i32>>(4),
@@ -298,9 +283,9 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     let mut target_dict: FxHashMap<DbID, Vec<(DbID, &str, Range<i32>, &str)>> =
         FxHashMap::default();
     for row in &targets {
-        let key = row.get::<usize, DbID>(0);
+        let key = row.get::<usize, i64>(0) as DbID;
         let value = (
-            row.get::<usize, DbID>(1),
+            row.get::<usize, i64>(1) as DbID,
             row.get::<usize, &str>(2),
             row.get::<usize, Range<i32>>(3),
             row.get::<usize, &str>(4),
@@ -316,16 +301,16 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
     let source_id_list = sources
         .iter()
-        .map(|row| row.get::<&str, DbID>("id"))
-        .collect::<Vec<DbID>>();
+        .map(|row| row.get::<&str, i64>("id"))
+        .collect::<Vec<i64>>();
     let source_facets = client.query(&source_facet_statement, &[&source_id_list])?;
     let mut source_facet_dict: FxHashMap<DbID, Vec<(DbID, &str, DbID)>> = FxHashMap::default();
     for row in &source_facets {
-        let key = row.get::<usize, DbID>(0);
+        let key = row.get::<usize, i64>(0) as DbID;
         let value = (
-            row.get::<usize, DbID>(1),
+            row.get::<usize, i64>(1) as DbID,
             row.get::<usize, &str>(2),
-            row.get::<usize, DbID>(3),
+            row.get::<usize, i64>(3) as DbID,
         );
         if source_facet_dict.contains_key(&key) {
             if let Some(v) = source_facet_dict.get_mut(&key) {
@@ -338,46 +323,55 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
     println!("Regulatory Effect count: {}", reg_effect_id_list.len());
 
+    let nonsignificant_facet_value: DbID = all_facet_values
+        .iter()
+        .find(|fv| fv.facet_id == dir_facet.id && fv.value == "Non-significant")
+        .unwrap()
+        .id;
+
     // For each regulatory effect we want to add all the facets associated with the effect itself,
     // its sources and its targets to the bucket associated with the each source and target.
     // For each source we want to keep track of all the target buckets it's associated with, and for each
     // source we want to keep track of all the source buckets it's associated with.
     for reo_id in reg_effect_id_list {
-        // If we are targeting a specific chromosome filter out sources not in that chromosome.
-        // They won't be visible in the visualization and the bucket index will be wrong.
-        let re_source = source_dict.get(&reo_id).unwrap();
-        let re_facets = reg_effect_num_facets.get(&reo_id).unwrap();
+        let re_facets = reg_effect_num_facets.get(&(reo_id as DbID)).unwrap();
         let effect_size = *re_facets.get(FACET_EFFECT_SIZE).unwrap();
         let significance: f64 = (*re_facets.get(FACET_SIGNIFICANCE).unwrap()).into();
         let all_chromos = match options.chromo {
             Some(_) => false,
             None => true,
         };
-        let re_source_ref = Vec::from_iter(
-            re_source
+        // If we are targeting a specific chromosome filter out sources not in that chromosome.
+        // They won't be visible in the visualization and the bucket index will be wrong.
+        let re_sources = source_dict.get(&(reo_id as DbID)).unwrap();
+        let re_sources_ref = Vec::from_iter(
+            re_sources
                 .iter()
                 .filter(|s| all_chromos || s.2 == options.chromo.as_ref().unwrap()),
         );
+
         let mut source_counter: FxHashSet<BucketLoc> = FxHashSet::default();
-        let mut target_counter: FxHashSet<BucketLoc> = FxHashSet::default();
 
         let mut source_disc_facets: FxHashSet<DbID> = FxHashSet::default();
         let mut reg_disc_facets: FxHashSet<DbID> = FxHashSet::default();
 
-        if let Some(facets) = facet_values_dict.get(&reo_id) {
+        // The only categorical REO facet we care about is the direction (depleted, enriched, or non-significant)
+        if let Some(facets) = facet_values_dict.get(&(reo_id as DbID)) {
             facets
                 .iter()
                 .filter(|f| f.2 == dir_facet.id)
                 .for_each(|f| drop(reg_disc_facets.insert(f.0)));
         }
 
-        for source in &re_source_ref {
-            source_counter.insert(BucketLoc {
+        for source in &re_sources_ref {
+            let bucket_loc = BucketLoc {
                 chrom: *chrom_keys
                     .get(source.2.strip_prefix("chr").unwrap())
                     .unwrap(),
                 idx: bucket(source.3.lower().unwrap().value as u32),
-            });
+            };
+            source_counter.insert(bucket_loc);
+            features.insert(source.0, bucket_loc);
 
             for source_facets in &source_facet_dict.get(&source.0) {
                 source_facets
@@ -389,64 +383,50 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
 
         let disc_facets = &reg_disc_facets | &source_disc_facets;
 
-        if let Some(targets) = target_dict.get(&reo_id) {
-            for target in targets {
-                let chrom_name = target.1.strip_prefix("chr").unwrap();
-                let x = chrom_keys.get(chrom_name);
-                if let None = x {
-                    continue;
-                }
-                let target_start = match target.3 {
-                    "-" => target.2.upper().unwrap().value,
-                    _ => target.2.lower().unwrap().value,
-                };
-                let target_bucket = bucket(target_start as u32);
-                target_counter.insert(BucketLoc {
-                    chrom: *chrom_keys.get(chrom_name).unwrap(),
-                    idx: target_bucket,
-                });
-
-                {
-                    let targets = target_buckets
-                        .get_mut(chrom_name)
-                        .unwrap()
-                        .get_mut(target_bucket as usize)
-                        .unwrap();
-                    let target_info = targets
-                        .entry(target.0)
-                        .or_insert(FeatureData::new(target.0));
-                    target_info.add_facets(ObservationData {
-                        reo_id,
-                        facet_ids: disc_facets.clone().into_iter().collect(),
-                        effect_size,
-                        significance,
-                    });
-                    target_info.update_buckets(&source_counter);
-                }
+        let mut target_id: Option<DbID> = None;
+        if let Some(targets) = target_dict.get(&(reo_id as DbID)) {
+            let target = targets[0];
+            target_id = Some(target.0);
+            let chrom_name = target.1.strip_prefix("chr").unwrap();
+            let x = chrom_keys.get(chrom_name);
+            if let None = x {
+                continue;
             }
+            let target_start = match target.3 {
+                "-" => target.2.upper().unwrap().value,
+                _ => target.2.lower().unwrap().value,
+            };
+            let target_bucket = bucket(target_start as u32);
+            let target_bucket = BucketLoc {
+                chrom: *chrom_keys.get(chrom_name).unwrap(),
+                idx: target_bucket,
+            };
+            features.insert(target.0, target_bucket);
         }
 
-        for source in &re_source_ref {
-            let chrom_name = source.2.strip_prefix("chr").unwrap();
-
-            let source_bucket = bucket(source.3.lower().unwrap().value as u32);
-
-            {
-                let sources = source_buckets
-                    .get_mut(chrom_name)
-                    .unwrap()
-                    .get_mut(source_bucket as usize)
-                    .unwrap();
-                let source_info = sources
-                    .entry(source.0)
-                    .or_insert(FeatureData::new(source.0));
-                source_info.add_facets(ObservationData {
-                    reo_id,
-                    facet_ids: disc_facets.clone().into_iter().collect(),
+        if reg_disc_facets.contains(&nonsignificant_facet_value) {
+            for (sid, _, _, _) in re_sources {
+                nonsignificant_observations.push(ObservationData {
+                    reo_id: reo_id as DbID,
+                    facet_value_ids: disc_facets.iter().cloned().collect(),
+                    source_id: *sid,
+                    target_id,
                     effect_size,
                     significance,
+                    neg_log_significance: -significance.max(MIN_SIG).log10(),
                 });
-                source_info.update_buckets(&target_counter);
+            }
+        } else {
+            for (sid, _, _, _) in re_sources {
+                significant_observations.push(ObservationData {
+                    reo_id: reo_id as DbID,
+                    facet_value_ids: disc_facets.iter().cloned().collect(),
+                    source_id: *sid,
+                    target_id,
+                    effect_size,
+                    significance,
+                    neg_log_significance: -significance.max(MIN_SIG).log10(),
+                });
             }
         }
 
@@ -457,35 +437,6 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         "Buckets filled... {:.0}s",
         re_start_time.elapsed().as_secs()
     );
-
-    for (i, info) in assembly_info.iter().enumerate() {
-        let chrom_name = info.0;
-        let chrom_data = chrom_data.get_mut(i).unwrap();
-        for (j, source_bucket) in source_buckets.get(chrom_name).unwrap().iter().enumerate() {
-            {
-                if source_bucket.len() == 0 {
-                    continue;
-                }
-            }
-            let source = Interval {
-                start: options.bucket_size * (j as u32) + 1,
-                values: source_bucket.clone().into_values().collect(),
-            };
-            chrom_data.source_intervals.push(source);
-        }
-        for (j, target_bucket) in target_buckets.get(chrom_name).unwrap().iter().enumerate() {
-            {
-                if target_bucket.len() == 0 {
-                    continue;
-                }
-            }
-            let target = Interval {
-                start: options.bucket_size * (j as u32) + 1,
-                values: target_bucket.clone().into_values().collect(),
-            };
-            chrom_data.target_intervals.push(target);
-        }
-    }
 
     // These are all the facets that are potentially relevant for coverage filtering
     let experiment_facet_coverages = facet_set();
@@ -548,8 +499,12 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
     }
 
     Ok(CoverageData {
+        significant_observations,
+        nonsignificant_observations,
+        bucket_size: options.bucket_size,
         chromosomes: chrom_data,
-        facets: facets.into_iter().map(|f| f.clone()).collect(),
+        facets: facets.into_iter().cloned().collect(),
         chrom_lengths: assembly_info.iter().map(|c| c.1 as usize).collect(),
+        features,
     })
 }

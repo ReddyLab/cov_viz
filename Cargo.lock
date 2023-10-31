@@ -50,6 +50,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytemuck"
+version = "1.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "374d28ec25809ee0e23827c2ab573d729e293f281dfe393500e7ad618baa61c6"
+
+[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -69,20 +75,21 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cov_viz"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "bincode",
  "cov_viz_ds",
  "postgres",
  "postgres_range",
+ "roaring",
  "rustc-hash",
  "serde",
 ]
 
 [[package]]
 name = "cov_viz_ds"
-version = "0.2.2"
-source = "git+https://github.com/ReddyLab/cov_viz_ds?rev=21b6986606e141a312f352cd0101f370c6cc4964#21b6986606e141a312f352cd0101f370c6cc4964"
+version = "0.3.0"
+source = "git+https://github.com/ReddyLab/cov_viz_ds?rev=c97744887871be107d220ee713c122726f908849#c97744887871be107d220ee713c122726f908849"
 dependencies = [
  "bincode",
  "rustc-hash",
@@ -483,6 +490,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62f25bc4c7e55e0b0b7a1d43fb893f4fa1361d0abe38b9ce4f323c2adfe6ef42"
 dependencies = [
  "bitflags",
+]
+
+[[package]]
+name = "retain_mut"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c31b5c4033f8fdde8700e4657be2c497e7288f01515be52168c631e2e4d4086"
+
+[[package]]
+name = "roaring"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6106b5cf8587f5834158895e9715a3c6c9716c8aefab57f1f7680917191c7873"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "retain_mut",
 ]
 
 [[package]]
