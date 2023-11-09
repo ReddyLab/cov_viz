@@ -17,7 +17,10 @@ fn main() {
     };
 
     match build_data(&options, &mut client) {
-        Ok(data) => data.serialize(&options.output_location),
+        Ok((coverage, features)) => {
+            coverage.serialize(&options.cov_output_location);
+            features.serialize(&options.features_output_location);
+        }
         Err(e) => eprintln!("{}", e),
     };
 }

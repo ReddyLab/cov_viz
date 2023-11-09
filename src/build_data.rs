@@ -3,6 +3,7 @@ use std::time::Instant;
 use postgres::types::Json;
 use postgres::{Client, Error};
 use postgres_range::Range;
+use roaring::RoaringTreemap;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::options::Options;
@@ -97,14 +98,19 @@ fn select_assembly<'a>(
     assembly_info
 }
 
-pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData, Error> {
+pub fn build_data(
+    options: &Options,
+    client: &mut Client,
+) -> Result<(CoverageData, ExperimentFeatureData), Error> {
     let bucket = |size: u32| size / options.bucket_size;
 
     let assembly_info = select_assembly(&options.assembly_name, &options.chromo);
 
     let mut significant_observations: Vec<ObservationData> = Vec::new();
     let mut nonsignificant_observations: Vec<ObservationData> = Vec::new();
-    let mut features = FxHashMap::<DbID, BucketLoc>::default();
+    let mut feature_buckets = FxHashMap::<DbID, BucketLoc>::default();
+    let mut source_set = RoaringTreemap::default();
+    let mut target_set = RoaringTreemap::default();
 
     let mut chrom_keys: FxHashMap<&str, u8> = FxHashMap::default();
     for i in 0..assembly_info.len() {
@@ -371,7 +377,8 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 idx: bucket(source.3.lower().unwrap().value as u32),
             };
             source_counter.insert(bucket_loc);
-            features.insert(source.0, bucket_loc);
+            feature_buckets.insert(source.0, bucket_loc);
+            source_set.insert(source.0);
 
             for source_facets in &source_facet_dict.get(&source.0) {
                 source_facets
@@ -401,7 +408,8 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
                 chrom: *chrom_keys.get(chrom_name).unwrap(),
                 idx: target_bucket,
             };
-            features.insert(target.0, target_bucket);
+            feature_buckets.insert(target.0, target_bucket);
+            target_set.insert(target.0);
         }
 
         if reg_disc_facets.contains(&nonsignificant_facet_value) {
@@ -498,13 +506,19 @@ pub fn build_data(options: &Options, client: &mut Client) -> Result<CoverageData
         facets.push(facet);
     }
 
-    Ok(CoverageData {
-        significant_observations,
-        nonsignificant_observations,
-        bucket_size: options.bucket_size,
-        chromosomes: chrom_data,
-        facets: facets.into_iter().cloned().collect(),
-        chrom_lengths: assembly_info.iter().map(|c| c.1 as usize).collect(),
-        features,
-    })
+    Ok((
+        CoverageData {
+            significant_observations,
+            nonsignificant_observations,
+            bucket_size: options.bucket_size,
+            chromosomes: chrom_data,
+            facets: facets.into_iter().cloned().collect(),
+            chrom_lengths: assembly_info.iter().map(|c| c.1 as usize).collect(),
+            feature_buckets,
+        },
+        ExperimentFeatureData {
+            sources: source_set,
+            targets: target_set,
+        },
+    ))
 }
