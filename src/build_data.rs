@@ -71,11 +71,8 @@ const GRCH37: [(&str, i32, u8); 25] = [
     ("MT", 16569, 24),
 ];
 
-fn select_assembly<'a>(
-    assembly_name: &'a str,
-    chromo: &Option<String>,
-) -> Vec<(&'static str, i32, u8)> {
-    let mut assembly_info = match assembly_name {
+fn select_assembly<'a>(assembly_name: &'a str) -> Vec<(&'static str, i32, u8)> {
+    match assembly_name {
         "GRCH37" => GRCH37.to_vec(),
         "GRCH38" => GRCH38.to_vec(),
         _ => {
@@ -85,17 +82,7 @@ fn select_assembly<'a>(
             );
             panic!();
         }
-    };
-
-    if let Some(chromo) = chromo {
-        let chromo = chromo.strip_prefix("chr").unwrap();
-        assembly_info = assembly_info
-            .into_iter()
-            .filter(|c| c.0 == chromo)
-            .collect();
     }
-
-    assembly_info
 }
 
 pub fn build_data(
@@ -104,7 +91,7 @@ pub fn build_data(
 ) -> Result<(CoverageData, ExperimentFeatureData), Error> {
     let bucket = |size: u32| size / options.bucket_size;
 
-    let assembly_info = select_assembly(&options.assembly_name, &options.chromo);
+    let assembly_info = select_assembly(&options.assembly_name);
 
     let mut significant_observations: Vec<ObservationData> = Vec::new();
     let mut nonsignificant_observations: Vec<ObservationData> = Vec::new();
@@ -113,14 +100,14 @@ pub fn build_data(
     let mut target_set = RoaringTreemap::default();
 
     let mut chrom_keys: FxHashMap<&str, u8> = FxHashMap::default();
-    for i in 0..assembly_info.len() {
-        chrom_keys.insert(assembly_info[i].0, assembly_info[i].2);
+    for info in &assembly_info {
+        chrom_keys.insert(info.0, info.2);
     }
 
-    let mut chrom_data: Vec<ChromosomeData> = Vec::new();
-    for chrom in &assembly_info {
-        chrom_data.push(ChromosomeData::from(chrom.0, chrom.2))
-    }
+    let chrom_data: Vec<ChromosomeData> = assembly_info
+        .iter()
+        .map(|chrom| ChromosomeData::from(chrom.0, chrom.2))
+        .collect();
 
     let all_facet_rows = client.query(
         "SELECT id, name, description, facet_type FROM search_facet",
@@ -222,9 +209,11 @@ pub fn build_data(
     let reg_effects_chromo_statement = client.prepare(r#"
         SELECT search_regulatoryeffectobservation.id, search_regulatoryeffectobservation.facet_num_values
         FROM search_regulatoryeffectobservation
-        INNER JOIN search_regulatoryeffectobservation_sources as re_ta ON (search_regulatoryeffectobservation.id = re_ta.regulatoryeffectobservation_id)
-        INNER JOIN search_dnafeature as fa ON (fa.id = re_ta.dnafeature_id)
-        WHERE search_regulatoryeffectobservation.analysis_accession_id = $1 and fa.chrom_name = $2"#
+        INNER JOIN search_regulatoryeffectobservation_sources as re_s ON (search_regulatoryeffectobservation.id = re_s.regulatoryeffectobservation_id)
+        INNER JOIN search_dnafeature as sf ON (sf.id = re_s.dnafeature_id)
+        INNER JOIN search_regulatoryeffectobservation_targets as re_t ON (search_regulatoryeffectobservation.id = re_t.regulatoryeffectobservation_id)
+        INNER JOIN search_dnafeature as tf ON (tf.id = re_t.dnafeature_id)
+        WHERE search_regulatoryeffectobservation.analysis_accession_id = $1 and (sf.chrom_name = $2 or tf.chrom_name = $2)"#
     )?;
     let reg_effects = match &options.chromo {
         None => client.query(&reg_effects_statement, &[&options.analysis_accession_id])?,
@@ -254,13 +243,10 @@ pub fn build_data(
             row.get::<usize, &str>(2),
             row.get::<usize, i64>(3) as DbID,
         );
-        if facet_values_dict.contains_key(&key) {
-            if let Some(v) = facet_values_dict.get_mut(&key) {
-                v.push(value);
-            }
-        } else {
-            facet_values_dict.insert(key, vec![value]);
-        }
+        facet_values_dict
+            .entry(key)
+            .and_modify(|e| e.push(value))
+            .or_insert(vec![value]);
     }
 
     let sources = client.query(&re_sources_statement, &[&reg_effect_id_list])?;
@@ -270,19 +256,22 @@ pub fn build_data(
     > = FxHashMap::default();
     for row in &sources {
         let key = row.get::<usize, i64>(0) as DbID;
-        let value = (
-            row.get::<usize, i64>(1) as DbID,
-            row.get::<usize, Option<Json<FxHashMap<&str, f32>>>>(2),
-            row.get::<usize, &str>(3),
-            row.get::<usize, Range<i32>>(4),
-        );
-        if source_dict.contains_key(&key) {
-            if let Some(v) = source_dict.get_mut(&key) {
-                v.push(value);
-            }
-        } else {
-            source_dict.insert(key, vec![value]);
-        }
+        source_dict
+            .entry(key)
+            .and_modify(|e| {
+                e.push((
+                    row.get::<usize, i64>(1) as DbID,
+                    row.get::<usize, Option<Json<FxHashMap<&str, f32>>>>(2),
+                    row.get::<usize, &str>(3),
+                    row.get::<usize, Range<i32>>(4),
+                ))
+            })
+            .or_insert(vec![(
+                row.get::<usize, i64>(1) as DbID,
+                row.get::<usize, Option<Json<FxHashMap<&str, f32>>>>(2),
+                row.get::<usize, &str>(3),
+                row.get::<usize, Range<i32>>(4),
+            )]);
     }
 
     let targets = client.query(&re_targets_statement, &[&reg_effect_id_list])?;
@@ -296,13 +285,10 @@ pub fn build_data(
             row.get::<usize, Range<i32>>(3),
             row.get::<usize, &str>(4),
         );
-        if target_dict.contains_key(&key) {
-            if let Some(v) = target_dict.get_mut(&key) {
-                v.push(value);
-            }
-        } else {
-            target_dict.insert(key, vec![value]);
-        }
+        target_dict
+            .entry(key)
+            .and_modify(|e| e.push(value))
+            .or_insert(vec![value]);
     }
 
     let source_id_list = sources
@@ -318,13 +304,10 @@ pub fn build_data(
             row.get::<usize, &str>(2),
             row.get::<usize, i64>(3) as DbID,
         );
-        if source_facet_dict.contains_key(&key) {
-            if let Some(v) = source_facet_dict.get_mut(&key) {
-                v.push(value);
-            }
-        } else {
-            source_facet_dict.insert(key, vec![value]);
-        }
+        source_facet_dict
+            .entry(key)
+            .and_modify(|e| e.push(value))
+            .or_insert(vec![value]);
     }
 
     println!("Regulatory Effect count: {}", reg_effect_id_list.len());
@@ -343,33 +326,30 @@ pub fn build_data(
         let re_facets = reg_effect_num_facets.get(&(reo_id as DbID)).unwrap();
         let effect_size = *re_facets.get(FACET_EFFECT_SIZE).unwrap();
         let significance: f64 = (*re_facets.get(FACET_SIGNIFICANCE).unwrap()).into();
-        let all_chromos = match options.chromo {
-            Some(_) => false,
-            None => true,
-        };
-        // If we are targeting a specific chromosome filter out sources not in that chromosome.
-        // They won't be visible in the visualization and the bucket index will be wrong.
+
         let re_sources = source_dict.get(&(reo_id as DbID)).unwrap();
-        let re_sources_ref = Vec::from_iter(
-            re_sources
-                .iter()
-                .filter(|s| all_chromos || s.2 == options.chromo.as_ref().unwrap()),
-        );
 
         let mut source_counter: FxHashSet<BucketLoc> = FxHashSet::default();
 
-        let mut source_disc_facets: FxHashSet<DbID> = FxHashSet::default();
-        let mut reg_disc_facets: FxHashSet<DbID> = FxHashSet::default();
+        let mut source_cat_facets: FxHashSet<DbID> = FxHashSet::default();
+        let mut reg_cat_facets: FxHashSet<DbID> = FxHashSet::default();
 
         // The only categorical REO facet we care about is the direction (depleted, enriched, or non-significant)
         if let Some(facets) = facet_values_dict.get(&(reo_id as DbID)) {
             facets
                 .iter()
                 .filter(|f| f.2 == dir_facet.id)
-                .for_each(|f| drop(reg_disc_facets.insert(f.0)));
+                .for_each(|f| drop(reg_cat_facets.insert(f.0)));
         }
 
-        for source in &re_sources_ref {
+        for source in re_sources {
+            for source_facets in &source_facet_dict.get(&source.0) {
+                source_facets
+                    .iter()
+                    .filter(|f| source_facet_ids.contains(&f.2))
+                    .for_each(|f| drop(source_cat_facets.insert(f.0)));
+            }
+
             let bucket_loc = BucketLoc {
                 chrom: *chrom_keys
                     .get(source.2.strip_prefix("chr").unwrap())
@@ -379,16 +359,9 @@ pub fn build_data(
             source_counter.insert(bucket_loc);
             feature_buckets.insert(source.0, bucket_loc);
             source_set.insert(source.0);
-
-            for source_facets in &source_facet_dict.get(&source.0) {
-                source_facets
-                    .iter()
-                    .filter(|f| source_facet_ids.contains(&f.2))
-                    .for_each(|f| drop(source_disc_facets.insert(f.0)));
-            }
         }
 
-        let disc_facets = &reg_disc_facets | &source_disc_facets;
+        let cat_facets = &reg_cat_facets | &source_cat_facets;
 
         let mut target_id: Option<DbID> = None;
         if let Some(targets) = target_dict.get(&(reo_id as DbID)) {
@@ -412,11 +385,11 @@ pub fn build_data(
             target_set.insert(target.0);
         }
 
-        if reg_disc_facets.contains(&nonsignificant_facet_value) {
+        if reg_cat_facets.contains(&nonsignificant_facet_value) {
             for (sid, _, _, _) in re_sources {
                 nonsignificant_observations.push(ObservationData {
                     reo_id: reo_id as DbID,
-                    facet_value_ids: disc_facets.iter().cloned().collect(),
+                    facet_value_ids: cat_facets.iter().cloned().collect(),
                     source_id: *sid,
                     target_id,
                     effect_size,
@@ -428,7 +401,7 @@ pub fn build_data(
             for (sid, _, _, _) in re_sources {
                 significant_observations.push(ObservationData {
                     reo_id: reo_id as DbID,
-                    facet_value_ids: disc_facets.iter().cloned().collect(),
+                    facet_value_ids: cat_facets.iter().cloned().collect(),
                     source_id: *sid,
                     target_id,
                     effect_size,
@@ -438,7 +411,7 @@ pub fn build_data(
             }
         }
 
-        facet_ids.extend(&disc_facets);
+        facet_ids.extend(&cat_facets);
     }
 
     println!(
